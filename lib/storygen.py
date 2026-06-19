@@ -44,25 +44,9 @@ ABSOLUTE RULES FOR DIALOGUE:
 8. The LAST line should feel like a mic drop — a punchy observation, not a question or teaser.
 9. VARY the dynamic: sometimes rae2 is the one who knows, sometimes rae is surprised. Don't always have the same pattern.
 
-COMPONENT CARDS:
-Pick 1-2 visual cards to show during the video. Each appears in the upper half of the screen for ~2.5 seconds. Available types:
-
-- big_move: Shows the stock's % move huge. Data: {"pct": number, "direction": "up"/"down", "name": "Company Name"}
-- company_card: Shows who the company is. Data: {"name": "Company Name", "sector": "Technology"}
-- context_quote: A pull-quote from the story. Data: {"text": "short punchy quote", "source": ""}
-- verdict_stamp: Market read stamp. Data: {"label": "bullish"/"bearish"/"mixed"/"growth"}. Match to the actual story.
-- reddit_buzz: Reddit activity. Data: {"posts": number, "level": "high"/"medium"/"low"}. Only use if reddit_posts > 0.
-
-COMPONENT RULES:
-- Pick 1-2 components that enhance the story. Don't force both.
-- show_at is a fraction (0.0-1.0) of when in the video to show the card.
-- Space components out. big_move early, verdict_stamp late.
-- reddit_buzz only if reddit_posts > 0.
-
 OUTPUT FORMAT — return valid JSON only, no markdown, no code fences:
 {
   "dialogue": [{"character": "rae2", "text": "..."}, {"character": "rae", "text": "..."}],
-  "components": [...],
   "title": "Short catchy title (max 60 chars)",
   "description": "Engaging description with hashtags (max 200 chars)"
 }
@@ -82,15 +66,11 @@ DESCRIPTION RULES:
 FEW_SHOT = [
     {
         "user": "Company: Oracle. Move: -13%. Context: Stock crashed after earnings but cloud revenue hit a record high. The CEO is betting everything on AI infrastructure. Sector: Technology. Verdict: growth.",
-        "assistant": """{"dialogue": [{"character": "rae2", "text": "Bro Oracle just tanked 13 percent after earnings."}, {"character": "rae", "text": "Oh please. Their cloud revenue just hit a record and Larry Ellison is literally betting the company on AI."}, {"character": "rae2", "text": "So you're saying buy the dip?"}, {"character": "rae", "text": "This dip is a gift wrapped in red ink."}], "components": [{"type": "big_move", "show_at": 0.05, "data": {"pct": -13.0, "direction": "down", "name": "Oracle"}}], "title": "Oracle Tanked 13% - But Here is Why Its a Gift", "description": "Oracle crashed after earnings but cloud revenue hit records. Is this dip a gift? #stocks #investing #shorts #stocksbrew"}""",
+        "assistant": """{"dialogue": [{"character": "rae2", "text": "Bro Oracle just tanked 13 percent after earnings."}, {"character": "rae", "text": "Oh please. Their cloud revenue just hit a record and Larry Ellison is literally betting the company on AI."}, {"character": "rae2", "text": "So you're saying buy the dip?"}, {"character": "rae", "text": "This dip is a gift wrapped in red ink."}], "title": "Oracle Tanked 13% - But Here is Why Its a Gift", "description": "Oracle crashed after earnings but cloud revenue hit records. Is this dip a gift? #stocks #investing #shorts #stocksbrew"}""",
     },
     {
         "user": "Company: Cloudflare. Move: -23%. Context: Company slashed 20 percent of workforce and gave weak guidance. Reddit is buzzing with 140 posts. Sector: Technology. Verdict: bearish.",
-        "assistant": """{"dialogue": [{"character": "rae2", "text": "Yo Cloudflare just crashed 23 percent. They fired a fifth of the company."}, {"character": "rae", "text": "And the guidance was brutal. But they're still the backbone of half the internet."}, {"character": "rae2", "text": "So falling knife or screaming buy?"}, {"character": "rae", "text": "That's the million dollar question nobody wants to answer."}], "components": [{"type": "big_move", "show_at": 0.05, "data": {"pct": -23.0, "direction": "down", "name": "Cloudflare"}}, {"type": "reddit_buzz", "show_at": 0.4, "data": {"posts": 140, "level": "high"}}], "title": "Cloudflare Crashed 23% - Falling Knife or Buy?", "description": "Cloudflare fired 20% and crashed. Reddit buzzing. Falling knife or buy? #stocks #investing #shorts #stocksbrew"}""",
-    },
-    {
-        "user": "Company: Broadcom. Move: +1.4%. Context: Everyone focused on Nvidia but Broadcom quietly raised guidance 50 percent. Stock barely moved. They dominate the networking chip layer. Sector: Technology. Verdict: bullish.",
-        "assistant": """{"dialogue": [{"character": "rae2", "text": "Everyone keeps talking about Nvidia but what about Broadcom?"}, {"character": "rae", "text": "Broadcom just raised guidance 50 percent and nobody noticed."}, {"character": "rae2", "text": "And the stock barely moved?"}, {"character": "rae", "text": "Exactly. That's why it's the most interesting name in the market right now."}], "components": [{"type": "company_card", "show_at": 0.1, "data": {"name": "Broadcom", "sector": "Semiconductors"}}], "title": "Nobody is Watching Broadcom - Here is Why They Should", "description": "Broadcom raised guidance 50% and nobody noticed. #stocks #investing #shorts #stocksbrew"}""",
+        "assistant": """{"dialogue": [{"character": "rae2", "text": "Yo Cloudflare just crashed 23 percent. They fired a fifth of the company."}, {"character": "rae", "text": "And the guidance was brutal. But they're still the backbone of half the internet."}, {"character": "rae2", "text": "So falling knife or screaming buy?"}, {"character": "rae", "text": "That's the million dollar question nobody wants to answer."}], "title": "Cloudflare Crashed 23% - Falling Knife or Buy?", "description": "Cloudflare fired 20% and crashed. Reddit buzzing. Falling knife or buy? #stocks #investing #shorts #stocksbrew"}""",
     },
 ]
 
@@ -187,7 +167,6 @@ def generate_script(pick: dict, *, model: str = "gpt-4o-mini") -> dict:
         parsed = {"dialogue": [{"character": "rae2", "text": raw.strip().strip('"')}], "components": []}
 
     dialogue = parsed.get("dialogue", [])
-    components = parsed.get("components", [])
     title = parsed.get("title", "")
     description = parsed.get("description", "")
 
@@ -203,7 +182,7 @@ def generate_script(pick: dict, *, model: str = "gpt-4o-mini") -> dict:
         words = last.split()
         dialogue[-1]["text"] = " ".join(words[:12]).rstrip(",.") + "."
 
-    result = {**pick, "dialogue": dialogue, "components": components, "title": title, "description": description}
+    result = {**pick, "dialogue": dialogue, "title": title, "description": description}
 
     _write_cache(key, pick, json.dumps(result))
     return result

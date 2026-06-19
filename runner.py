@@ -125,7 +125,6 @@ def process_script(script: dict, skip_upload: bool = False) -> Path | None:
         output=output,
         duration=duration,
         words=words,
-        components=script.get("components"),
         dialogue_lines=dialogue_lines,
     )
     size_mb = output.stat().st_size / 1024 / 1024
@@ -334,7 +333,6 @@ def main() -> None:
                 "name": pick.get("name"),
                 "change_pct": pick.get("change_pct"),
                 "source": pick.get("source", "auto"),
-                "components": pick.get("components", []),
                 "title": pick.get("title", ""),
                 "description": pick.get("description", ""),
             }, indent=2))
