@@ -333,6 +333,8 @@ def main() -> None:
                 "change_pct": pick.get("change_pct"),
                 "source": pick.get("source", "auto"),
                 "components": pick.get("components", []),
+                "title": pick.get("title", ""),
+                "description": pick.get("description", ""),
             }, indent=2))
             print(f"  queued {sid}")
 
