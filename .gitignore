@@ -12,7 +12,8 @@ scripts/queue/*.json
 scripts/done/
 scripts/failed/
 .DS_Store
+# Ignore generated videos but keep source assets
 *.mp4
-!assets/gameplay/.gitkeep
-!assets/speaker/.gitkeep
+!assets/gameplay/*.mp4
+!assets/speaker/*.png
 .commandcode/

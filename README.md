@@ -2,7 +2,7 @@
 
 Automated short-form video pipeline that generates brainrot-style finance shorts with two-character dialogue, visual component cards, and auto-scheduling to YouTube + Instagram.
 
-**Live at:** [stocksbrew.online](https://stocksbrew.online) | **YouTube:** [@tarat.youtube](https://youtube.com/@tarat.youtube)
+**Live at:** [stocksbrew.online](https://stocksbrew.online) | **YouTube:** [@stocksbrew.online](https://www.youtube.com/@stocksbrew.online)
 
 ## What it does
 

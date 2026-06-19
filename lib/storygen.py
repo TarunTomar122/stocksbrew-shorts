@@ -60,20 +60,37 @@ COMPONENT RULES:
 - reddit_buzz only if reddit_posts > 0.
 
 OUTPUT FORMAT — return valid JSON only, no markdown, no code fences:
-{"dialogue": [{"character": "rae2", "text": "Hey you see what Nvidia did today?"}, {"character": "rae", "text": "Ugh, please. Everyone's obsessed but nobody's watching Broadcom."}], "components": [{"type": "big_move", "show_at": 0.1, "data": {"pct": -13.0, "direction": "down", "name": "Oracle"}}]}"""
+{
+  "dialogue": [{"character": "rae2", "text": "..."}, {"character": "rae", "text": "..."}],
+  "components": [...],
+  "title": "Short catchy title (max 60 chars)",
+  "description": "Engaging description with hashtags (max 200 chars)"
+}
+
+TITLE RULES:
+- Max 60 characters
+- Catchy, clickbait-y, makes people want to watch
+- Include the company name
+- Examples: "Oracle Just Tanked 13% — Here's Why It's a Gift", "Nobody's Watching Broadcom", "Cloudflare Crashed 23% — Falling Knife or Screaming Buy?"
+
+DESCRIPTION RULES:
+- Max 200 characters
+- Include company name and key insight
+- Add hashtags at the end: #stocks #investing #shorts #stocksbrew
+- Examples: "Oracle crashed after earnings but cloud revenue hit records. Is this dip a gift? #stocks #investing #shorts #stocksbrew" """
 
 FEW_SHOT = [
     {
         "user": "Company: Oracle. Move: -13%. Context: Stock crashed after earnings but cloud revenue hit a record high. The CEO is betting everything on AI infrastructure. Sector: Technology. Verdict: growth.",
-        "assistant": '{"dialogue": [{"character": "rae2", "text": "Bro Oracle just tanked 13 percent after earnings. That\\u2019s brutal."}, {"character": "rae", "text": "Oh please. Their cloud revenue just hit a record and Larry Ellison is literally betting the company on AI."}, {"character": "rae2", "text": "So you\\u2019re saying buy the dip?"}, {"character": "rae", "text": "I\\u2019m saying this dip is a gift wrapped in red ink."}], "components": [{"type": "big_move", "show_at": 0.05, "data": {"pct": -13.0, "direction": "down", "name": "Oracle"}}, {"type": "context_quote", "show_at": 0.5, "data": {"text": "Cloud revenue hit a new record high", "source": "earnings"}}, {"type": "verdict_stamp", "show_at": 0.85, "data": {"label": "growth"}}]}',
+        "assistant": '{"dialogue": [{"character": "rae2", "text": "Bro Oracle just tanked 13 percent after earnings. That\\u2019s brutal."}, {"character": "rae", "text": "Oh please. Their cloud revenue just hit a record and Larry Ellison is literally betting the company on AI."}, {"character": "rae2", "text": "So you\\u2019re saying buy the dip?"}, {"character": "rae", "text": "I\\u2019m saying this dip is a gift wrapped in red ink."}], "components": [{"type": "big_move", "show_at": 0.05, "data": {"pct": -13.0, "direction": "down", "name": "Oracle"}}, {"type": "context_quote", "show_at": 0.5, "data": {"text": "Cloud revenue hit a new record high", "source": "earnings"}}, {"type": "verdict_stamp", "show_at": 0.85, "data": {"label": "growth"}}], "title": "Oracle Tanked 13% — But Here's Why It's a Gift", "description": "Oracle crashed after earnings but cloud revenue just hit a record. Is this dip a gift? #stocks #investing #shorts #stocksbrew"}',
     },
     {
         "user": "Company: Cloudflare. Move: -23%. Context: Company slashed 20 percent of workforce and gave weak guidance. Reddit is buzzing with 140 posts. Sector: Technology. Verdict: bearish.",
-        "assistant": '{"dialogue": [{"character": "rae2", "text": "Yo Cloudflare just crashed 23 percent. They fired a fifth of the company."}, {"character": "rae", "text": "And the guidance was absolutely brutal. But here\\u2019s the thing \\u2014 they\\u2019re still the backbone of half the internet."}, {"character": "rae2", "text": "So falling knife or screaming buy?"}, {"character": "rae", "text": "That\\u2019s the million dollar question nobody wants to answer."}], "components": [{"type": "big_move", "show_at": 0.05, "data": {"pct": -23.0, "direction": "down", "name": "Cloudflare"}}, {"type": "reddit_buzz", "show_at": 0.4, "data": {"posts": 140, "level": "high"}}, {"type": "verdict_stamp", "show_at": 0.85, "data": {"label": "bearish"}}]}',
+        "assistant": '{"dialogue": [{"character": "rae2", "text": "Yo Cloudflare just crashed 23 percent. They fired a fifth of the company."}, {"character": "rae", "text": "And the guidance was absolutely brutal. But here\\u2019s the thing \\u2014 they\\u2019re still the backbone of half the internet."}, {"character": "rae2", "text": "So falling knife or screaming buy?"}, {"character": "rae", "text": "That\\u2019s the million dollar question nobody wants to answer."}], "components": [{"type": "big_move", "show_at": 0.05, "data": {"pct": -23.0, "direction": "down", "name": "Cloudflare"}}, {"type": "reddit_buzz", "show_at": 0.4, "data": {"posts": 140, "level": "high"}}, {"type": "verdict_stamp", "show_at": 0.85, "data": {"label": "bearish"}}], "title": "Cloudflare Crashed 23% — Falling Knife or Buy?", "description": "Cloudflare fired 20% of their workforce and crashed. Reddit is buzzing. Falling knife or screaming buy? #stocks #investing #shorts #stocksbrew"}',
     },
     {
         "user": "Company: Broadcom. Move: +1.4%. Context: Everyone focused on Nvidia but Broadcom quietly raised guidance 50 percent. Stock barely moved. They dominate the networking chip layer. Sector: Technology. Verdict: bullish.",
-        "assistant": '{"dialogue": [{"character": "rae2", "text": "Everyone keeps talking about Nvidia but what about Broadcom?"}, {"character": "rae", "text": "Broadcom just raised guidance 50 percent and nobody noticed. They\\u2019re quietly eating the entire networking layer."}, {"character": "rae2", "text": "And the stock barely moved?"}, {"character": "rae", "text": "Exactly. That\\u2019s why it\\u2019s the most interesting name in the market right now."}], "components": [{"type": "company_card", "show_at": 0.1, "data": {"name": "Broadcom", "sector": "Semiconductors"}}, {"type": "verdict_stamp", "show_at": 0.8, "data": {"label": "bullish"}}]}',
+        "assistant": '{"dialogue": [{"character": "rae2", "text": "Everyone keeps talking about Nvidia but what about Broadcom?"}, {"character": "rae", "text": "Broadcom just raised guidance 50 percent and nobody noticed. They\\u2019re quietly eating the entire networking layer."}, {"character": "rae2", "text": "And the stock barely moved?"}, {"character": "rae", "text": "Exactly. That\\u2019s why it\\u2019s the most interesting name in the market right now."}], "components": [{"type": "company_card", "show_at": 0.1, "data": {"name": "Broadcom", "sector": "Semiconductors"}}, {"type": "verdict_stamp", "show_at": 0.8, "data": {"label": "bullish"}}], "title": "Nobody\\u2019s Watching Broadcom — Here\\u2019s Why They Should", "description": "Broadcom raised guidance 50% and nobody noticed. They\\u2019re eating the networking layer. #stocks #investing #shorts #stocksbrew"}',
     },
 ]
 

@@ -276,21 +276,35 @@ def main() -> None:
             print("No anomaly or reddit picks found. Run the trace-money pipeline first.")
             return
 
-        already_queued: set[str] = set()
-        if args.auto_skip_existing:
-            from datetime import date
-            today = date.today().isoformat()
-            for s in QUEUE.glob("*.json"):
-                if today in s.name:
-                    try:
-                        already_queued.add(json.loads(s.read_text()).get("ticker"))
-                    except Exception:
-                        pass
+        # Dedup: check both queue and done directories for today's tickers
+        already_processed: set[str] = set()
+        today = datetime.now().strftime("%Y%m%d")
+        for s in QUEUE.glob("*.json"):
+            try:
+                data = json.loads(s.read_text())
+                ticker = data.get("ticker") or data.get("name")
+                if ticker:
+                    already_processed.add(ticker.upper())
+            except Exception:
+                pass
+        for s in DONE.glob("*.json"):
+            if today in s.name:
+                try:
+                    data = json.loads(s.read_text())
+                    ticker = data.get("ticker") or data.get("name")
+                    if ticker:
+                        already_processed.add(ticker.upper())
+                except Exception:
+                    pass
 
-        fresh = [p for p in picks if p.get("ticker") not in already_queued]
+        fresh = [p for p in picks if (p.get("ticker") or "").upper() not in already_processed]
         print(f"  picked: {[(p.get('name', p.get('ticker')), p.get('change_pct')) for p in picks]}")
-        if already_queued:
-            print(f"  skipping (already queued today): {sorted(already_queued)}")
+        if already_processed:
+            print(f"  skipping (already processed today): {sorted(already_processed)}")
+
+        if not fresh:
+            print("All picks already processed today. Nothing to do.")
+            return
 
         print("Generating scripts via OpenAI...")
         enriched = storygen.generate_scripts(fresh)
