@@ -1,0 +1,25 @@
+{
+  "name": "aivideos-stocksbrew",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Brainrot short-form video pipeline — Runway avatar + gameplay bg + subtitles. Cron-driven.",
+  "scripts": {
+    "build": ".venv/bin/python scripts/build.py",
+    "avatar": ".venv/bin/python scripts/build.py avatar",
+    "brainrot": ".venv/bin/python scripts/build.py brainrot",
+    "clip": ".venv/bin/python scripts/build.py clip",
+    "run": ".venv/bin/python runner.py",
+    "queue": ".venv/bin/python runner.py --dry-run",
+    "loop": ".venv/bin/python runner.py --loop --poll-interval 30",
+    "auto": ".venv/bin/python runner.py --auto --max 1",
+    "auto-batch": ".venv/bin/python runner.py --auto --auto-count 5 --max 5",
+    "fb-test": ".venv/bin/python -c \"from lib import firebase; import json; print(json.dumps(firebase.smoke_test(), indent=2))\"",
+    "buffer-test": ".venv/bin/python -c \"from lib import buffer; import json; print(json.dumps(buffer.smoke_test_direct(), indent=2))\"",
+    "cloudinary-test": ".venv/bin/python -c \"from lib import hosting; import json; print(json.dumps(hosting.smoke_test(), indent=2))\"",
+    "list-avatars": ".venv/bin/python -c \"from lib import avatar; import json; print(json.dumps(avatar.list_avatars(), indent=2))\""
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  }
+}

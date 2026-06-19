@@ -1,0 +1,48 @@
+name: Daily Shorts Pipeline
+
+on:
+  schedule:
+    # 3pm IST, 7pm IST, 9pm IST, 1am IST (next day) — all in UTC
+    - cron: '30 9,13,15,19 * * *'
+  workflow_dispatch:  # manual trigger
+
+jobs:
+  generate-shorts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Set up credentials
+        env:
+          RUNWAYML_API_SECRET: ${{ secrets.RUNWAYML_API_SECRET }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+        run: |
+          echo "RUNWAYML_API_SECRET=${RUNWAYML_API_SECRET}" >> .env
+          echo "OPENAI_API_KEY=${OPENAI_API_KEY}" >> .env
+          echo "BUFFER_API_KEY=${BUFFER_API_KEY}" >> .env
+          echo "CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}" >> .env
+          echo "CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}" >> .env
+          echo "CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}" >> .env
+          echo "${FIREBASE_CREDENTIALS_JSON}" > firebase-credentials.json
+
+      - name: Generate short
+        run: python runner.py --auto --auto-count 1 --max 1

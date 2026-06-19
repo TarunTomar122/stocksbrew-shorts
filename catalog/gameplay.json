@@ -1,0 +1,224 @@
+{
+  "items": [
+    {
+      "id": "randombg-01",
+      "path": "assets/gameplay/randombg_01_26s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-26"
+      ],
+      "start": 535.82,
+      "duration": 26.48
+    },
+    {
+      "id": "randombg-02",
+      "path": "assets/gameplay/randombg_02_33s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-33"
+      ],
+      "start": 256.82,
+      "duration": 33.02
+    },
+    {
+      "id": "randombg-03",
+      "path": "assets/gameplay/randombg_03_30s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-30"
+      ],
+      "start": 1297.38,
+      "duration": 30.72
+    },
+    {
+      "id": "randombg-04",
+      "path": "assets/gameplay/randombg_04_21s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-21"
+      ],
+      "start": 1805.12,
+      "duration": 21.16
+    },
+    {
+      "id": "randombg-05",
+      "path": "assets/gameplay/randombg_05_20s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-20"
+      ],
+      "start": 1542.8,
+      "duration": 20.75
+    },
+    {
+      "id": "randombg-06",
+      "path": "assets/gameplay/randombg_06_21s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-21"
+      ],
+      "start": 322.68,
+      "duration": 21.4
+    },
+    {
+      "id": "randombg-07",
+      "path": "assets/gameplay/randombg_07_28s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-28"
+      ],
+      "start": 2935.33,
+      "duration": 28.49
+    },
+    {
+      "id": "randombg-08",
+      "path": "assets/gameplay/randombg_08_22s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-22"
+      ],
+      "start": 793.84,
+      "duration": 22.48
+    },
+    {
+      "id": "randombg-09",
+      "path": "assets/gameplay/randombg_09_32s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-32"
+      ],
+      "start": 3360.53,
+      "duration": 32.55
+    },
+    {
+      "id": "randombg-10",
+      "path": "assets/gameplay/randombg_10_31s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-31"
+      ],
+      "start": 1407.01,
+      "duration": 31.54
+    },
+    {
+      "id": "randombg-11",
+      "path": "assets/gameplay/randombg_11_39s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-39"
+      ],
+      "start": 164.85,
+      "duration": 39.53
+    },
+    {
+      "id": "randombg-12",
+      "path": "assets/gameplay/randombg_12_37s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-37"
+      ],
+      "start": 1025.6,
+      "duration": 37.17
+    },
+    {
+      "id": "randombg-13",
+      "path": "assets/gameplay/randombg_13_22s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-22"
+      ],
+      "start": 418.82,
+      "duration": 22.89
+    },
+    {
+      "id": "randombg-14",
+      "path": "assets/gameplay/randombg_14_26s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-26"
+      ],
+      "start": 2899.15,
+      "duration": 26.17
+    },
+    {
+      "id": "randombg-15",
+      "path": "assets/gameplay/randombg_15_23s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-23"
+      ],
+      "start": 2067.52,
+      "duration": 23.61
+    },
+    {
+      "id": "randombg-16",
+      "path": "assets/gameplay/randombg_16_32s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-32"
+      ],
+      "start": 1320.42,
+      "duration": 32.78
+    },
+    {
+      "id": "randombg-17",
+      "path": "assets/gameplay/randombg_17_30s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-30"
+      ],
+      "start": 222.75,
+      "duration": 30.95
+    },
+    {
+      "id": "randombg-18",
+      "path": "assets/gameplay/randombg_18_21s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-21"
+      ],
+      "start": 732.66,
+      "duration": 21.19
+    },
+    {
+      "id": "randombg-19",
+      "path": "assets/gameplay/randombg_19_33s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-33"
+      ],
+      "start": 1515.77,
+      "duration": 33.61
+    },
+    {
+      "id": "randombg-20",
+      "path": "assets/gameplay/randombg_20_26s.mp4",
+      "tags": [
+        "brainrot",
+        "vertical",
+        "duration-26"
+      ],
+      "start": 2080.04,
+      "duration": 26.28
+    }
+  ]
+}
