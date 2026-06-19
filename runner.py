@@ -139,8 +139,12 @@ def process_script(script: dict) -> Path | None:
             print(f"    -> Cloudinary: {video_url[:80]}...")
 
             # Build caption from dialogue or text
-            caption = _build_caption(script)
+            title, description = _build_caption(script)
             due_at = datetime.now() + timedelta(minutes=1)
+
+            # Combine title and description for Buffer
+            # YouTube uses title + description, Instagram uses just caption
+            caption = f"{title}\n\n{description}" if title else description
 
             results = buffer.schedule_to_youtube_and_instagram(
                 video_url=video_url,
@@ -161,30 +165,36 @@ def process_script(script: dict) -> Path | None:
     return output
 
 
-def _build_caption(script: dict) -> str:
-    """Build a social media caption from the script data."""
+def _build_caption(script: dict) -> tuple[str, str]:
+    """Build a social media caption from the script data. Returns (title, description)."""
+    title = script.get("title", "")
+    description = script.get("description", "")
     name = script.get("name", "")
     ticker = script.get("ticker", "")
     dialogue = script.get("dialogue", [])
     text = script.get("text", "")
 
-    # Use the first line of dialogue or the text
-    if dialogue:
-        hook = dialogue[0].get("text", "")
-    elif text:
-        hook = text
-    else:
-        hook = ""
+    # Fallback title if not provided
+    if not title:
+        if name:
+            title = f"{name} — Stock Analysis"
+        elif ticker:
+            title = f"{ticker} — Stock Analysis"
+        else:
+            title = "Stock Market Update"
 
-    # Build caption
-    parts = []
-    if name:
-        parts.append(f"{name}")
-    if hook:
-        parts.append(hook)
-    parts.append("#stocks #investing #shorts #stocksbrew")
+    # Fallback description if not provided
+    if not description:
+        # Use the first line of dialogue or the text
+        if dialogue:
+            hook = dialogue[0].get("text", "")
+        elif text:
+            hook = text
+        else:
+            hook = ""
+        description = f"{hook}\n\n#stocks #investing #shorts #stocksbrew"
 
-    return "\n\n".join(parts)
+    return title, description
 
 
 def _move_to(src: Path, dst_dir: Path) -> Path:
