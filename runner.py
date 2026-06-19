@@ -50,7 +50,7 @@ def _safe_stem(text: str, max_len: int = 30) -> str:
     return s[:max_len] or "short"
 
 
-def process_script(script: dict) -> Path | None:
+def process_script(script: dict, skip_upload: bool = False) -> Path | None:
     """Run the full pipeline for one script. Returns output path or None on failure."""
     _setup_dirs()
     dialogue = script.get("dialogue", [])
@@ -132,7 +132,7 @@ def process_script(script: dict) -> Path | None:
     print(f"    -> {output} ({size_mb:.1f}MB)")
 
     # Upload + schedule step
-    if not script.get("skip_upload"):
+    if not skip_upload and not script.get("skip_upload"):
         print("  [4/4] uploading to Cloudinary + scheduling on Buffer...")
         try:
             video_url = hosting.upload_video(output, folder="stocksbrew-shorts")
@@ -203,7 +203,7 @@ def _move_to(src: Path, dst_dir: Path) -> Path:
     return dst
 
 
-def run_queue(max_n: int = 1, loop: bool = False, poll_interval: int = 30) -> int:
+def run_queue(max_n: int = 1, loop: bool = False, poll_interval: int = 30, skip_upload: bool = False) -> int:
     _setup_dirs()
     processed = 0
     while True:
@@ -221,7 +221,7 @@ def run_queue(max_n: int = 1, loop: bool = False, poll_interval: int = 30) -> in
             print(f"\n=== {script_path.name} ===")
             try:
                 script = json.loads(script_path.read_text())
-                result = process_script(script)
+                result = process_script(script, skip_upload=skip_upload)
                 script_path = _move_to(script_path, DONE)
                 if result is None:
                     _move_to(script_path, FAILED)
@@ -258,6 +258,8 @@ def main() -> None:
                    help="Minimum heat_score to consider a ticker")
     p.add_argument("--auto-skip-existing", action="store_true",
                    help="Don't generate a script if one for the same ticker already queued today")
+    p.add_argument("--no-upload", action="store_true",
+                   help="Skip Cloudinary upload and Buffer scheduling")
     args = p.parse_args()
 
     _setup_dirs()
@@ -339,7 +341,7 @@ def main() -> None:
             print(f"  queued {sid}")
 
     if args.auto and args.max > 0:
-        n = run_queue(max_n=args.max, loop=args.loop, poll_interval=args.poll_interval)
+        n = run_queue(max_n=args.max, loop=args.loop, poll_interval=args.poll_interval, skip_upload=args.no_upload)
         print(f"\nProcessed {n} script(s).")
         return
 
@@ -353,7 +355,7 @@ def main() -> None:
             print(f"  {s.name}: {data.get('text', '')[:60]}")
         return
 
-    n = run_queue(max_n=args.max, loop=args.loop, poll_interval=args.poll_interval)
+    n = run_queue(max_n=args.max, loop=args.loop, poll_interval=args.poll_interval, skip_upload=args.no_upload)
     print(f"\nProcessed {n} script(s).")
 
 
