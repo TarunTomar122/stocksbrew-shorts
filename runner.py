@@ -143,12 +143,12 @@ def process_script(script: dict) -> Path | None:
             due_at = datetime.now() + timedelta(minutes=1)
 
             # Combine title and description for Buffer
-            # YouTube uses title + description, Instagram uses just caption
-            caption = f"{title}\n\n{description}" if title else description
+            caption = description if description else f"{title}\n\n#stocks #investing #shorts #stocksbrew"
 
             results = buffer.schedule_to_youtube_and_instagram(
                 video_url=video_url,
                 text=caption,
+                title=title,
                 due_at=due_at,
             )
             for r in results:

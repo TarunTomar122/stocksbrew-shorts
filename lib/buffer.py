@@ -52,7 +52,7 @@ def get_organizations() -> list[dict]:
 def get_channels(org_id: str) -> list[dict]:
     """Return [{id, name, service}, ...] for all channels in an organization."""
     data = _graphql("""
-        query GetChannels($orgId: ID!) {
+        query GetChannels($orgId: OrganizationId!) {
             channels(input: { organizationId: $orgId }) {
                 id
                 name
@@ -82,6 +82,10 @@ def schedule_post(
     video_url: str,
     due_at: datetime | None = None,
     thumbnail_url: str | None = None,
+    title: str | None = None,
+    category_id: str | None = None,
+    post_type: str | None = None,
+    should_share_to_feed: bool = True,
 ) -> dict:
     """Schedule a post with a video to a specific channel.
 
@@ -91,6 +95,10 @@ def schedule_post(
         video_url: Public URL of the video (from Cloudinary)
         due_at: When to publish (UTC). Defaults to 1 minute from now.
         thumbnail_url: Optional public URL for video thumbnail.
+        title: YouTube video title (required for YouTube)
+        category_id: YouTube category ID (e.g. "28" for Science & Technology)
+        post_type: Instagram post type ("post", "story", or "reel")
+        should_share_to_feed: Whether to share Instagram post to feed
 
     Returns: {"id": str, "text": str, "dueAt": str} on success, or error dict.
     """
@@ -101,6 +109,31 @@ def schedule_post(
     assets = [{"video": {"url": video_url}}]
     if thumbnail_url:
         assets[0]["video"]["thumbnailUrl"] = thumbnail_url
+
+    # Build input
+    input_data = {
+        "text": text,
+        "channelId": channel_id,
+        "schedulingType": "automatic",
+        "mode": "customScheduled",
+        "dueAt": due_at_str,
+        "assets": assets,
+    }
+
+    # Build metadata for service-specific fields
+    metadata = {}
+    if title:
+        metadata["youtube"] = {
+            "title": title,
+            "categoryId": category_id or "28",  # Default: Science & Technology
+        }
+    if post_type:
+        metadata["instagram"] = {
+            "type": post_type,
+            "shouldShareToFeed": should_share_to_feed,
+        }
+    if metadata:
+        input_data["metadata"] = metadata
 
     mutation = """
         mutation SchedulePost($input: CreatePostInput!) {
@@ -118,16 +151,7 @@ def schedule_post(
             }
         }
     """
-    variables = {
-        "input": {
-            "text": text,
-            "channelId": channel_id,
-            "schedulingType": "automatic",
-            "mode": "customScheduled",
-            "dueAt": due_at_str,
-            "assets": assets,
-        }
-    }
+    variables = {"input": input_data}
     data = _graphql(mutation, variables)
     result = data.get("data", {}).get("createPost", {})
     if "post" in result:
@@ -138,6 +162,7 @@ def schedule_post(
 def schedule_to_youtube_and_instagram(
     video_url: str,
     text: str,
+    title: str,
     due_at: datetime | None = None,
     services: list[str] | None = None,
 ) -> list[dict]:
@@ -153,14 +178,34 @@ def schedule_to_youtube_and_instagram(
 
     results = []
     for ch in channels:
-        result = schedule_post(
-            channel_id=ch["id"],
-            text=text,
-            video_url=video_url,
-            due_at=due_at,
-        )
+        service = ch.get("service")
+        if service == "youtube":
+            result = schedule_post(
+                channel_id=ch["id"],
+                text=text,
+                video_url=video_url,
+                due_at=due_at,
+                title=title,
+                category_id="28",  # Science & Technology
+            )
+        elif service == "instagram":
+            result = schedule_post(
+                channel_id=ch["id"],
+                text=text,
+                video_url=video_url,
+                due_at=due_at,
+                post_type="reel",
+                should_share_to_feed=True,
+            )
+        else:
+            result = schedule_post(
+                channel_id=ch["id"],
+                text=text,
+                video_url=video_url,
+                due_at=due_at,
+            )
         result["channel"] = ch.get("name", ch["id"])
-        result["service"] = ch.get("service")
+        result["service"] = service
         results.append(result)
     return results
 
