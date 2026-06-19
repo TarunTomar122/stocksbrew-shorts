@@ -1,67 +1,100 @@
-# aivideos-stocksbrew
+# stocksbrew-shorts
 
-Brainrot short-form video pipeline for stocksbrew.online.
+Automated short-form video pipeline that generates brainrot-style finance shorts with two-character dialogue, visual component cards, and auto-scheduling to YouTube + Instagram.
 
-- **Avatar voice** from Runway's `gwm1_avatars` model (your custom avatar)
-- **Background** from a looped gameplay clip library
-- **Speaker image** composited in a corner (no crop, no circle)
+**Live at:** [stocksbrew.online](https://stocksbrew.online) | **YouTube:** [@tarat.youtube](https://youtube.com/@tarat.youtube)
+
+## What it does
+
+1. **Pulls trending tickers** from Firebase (daily anomalies, heat list, reddit buzz)
+2. **Generates dialogue scripts** via OpenAI (two characters talking about the stock)
+3. **Creates avatar videos** via Runway's `gwm1_avatars` model (one per character line)
+4. **Composites brainrot shorts** with gameplay backgrounds, speaker images, subtitles, and visual component cards
+5. **Uploads to Cloudinary** and **schedules to Buffer** (YouTube + Instagram)
+
+## Features
+
+- **Two-character dialogue** — rae2 (blunt, casual) and rae (clever, sarcastic) discuss stock stories
+- **5 visual component cards** — big move, company card, context quote, verdict stamp, reddit buzz
 - **One-word subtitles** with Whisper word-level timing
-- **Auto mode** — pulls trending tickers from stocksbrew Firebase, generates
-  scripts via OpenAI, and produces finished shorts on cron
+- **Auto mode** — pulls data, generates scripts, renders videos, and schedules posts on cron
+- **4x daily scheduling** via GitHub Actions (3pm, 7pm, 9pm, 1am IST)
+
+## Tech stack
+
+- **Python 3.11** — core pipeline
+- **Runway ML** — avatar video generation (`gwm1_avatars`)
+- **OpenAI** — script generation (`gpt-4o-mini`)
+- **Firebase Admin** — Firestore data (anomalies, heat list, reddit)
+- **faster-whisper** — word-level transcription for subtitles
+- **Pillow** — visual component card rendering
+- **ffmpeg** — video compositing and processing
+- **Cloudinary** — video hosting
+- **Buffer API** — social media scheduling
+- **GitHub Actions** — cron scheduling
 
 ## Layout
 
 ```
 .
 ├── lib/                       # Modular Python helpers
-│   ├── avatar.py              # Runway avatar video generation
+│   ├── avatar.py              # Runway avatar video generation (single + dialogue)
 │   ├── brainrot.py            # The compositing pipeline
+│   ├── buffer.py              # Buffer API client (YouTube + Instagram scheduling)
 │   ├── catalog.py             # JSON catalog lookup
 │   ├── clipper.py             # Cut N random clips from a source
+│   ├── components.py          # Visual component card renderers
 │   ├── ffmpeg.py              # Low-level ffmpeg/ffprobe wrappers
-│   ├── firebase.py            # Firestore admin client (heat list, prices)
-│   ├── storygen.py            # OpenAI-powered script generation
+│   ├── firebase.py            # Firestore admin client (anomalies, heat list, reddit)
+│   ├── hosting.py             # Cloudinary video hosting
+│   ├── storygen.py            # OpenAI-powered dialogue script generation
 │   ├── subtitles.py           # Whisper-driven drawtext filter builder
 │   └── transcribe.py          # faster-whisper word timestamps
 ├── scripts/
 │   └── build.py               # One-off CLI: avatar | brainrot | clip
 ├── assets/
-│   ├── gameplay/              # randombg_*.mp4 background clips
-│   └── speaker/charimage.png  # Default speaker overlay
+│   ├── gameplay/              # Background gameplay clips
+│   └── speaker/               # Speaker images (charimage.png, char2image.png)
 ├── catalog/
 │   └── gameplay.json          # Index of gameplay clips
-├── scripts/queue/             # ← drop script JSONs here (or let --auto)
-│   ├── done/                  #   processed successfully
-│   └── failed/                #   errors for inspection
-├── .cache/                    # Whisper transcripts + OpenAI story cache
-├── output/                    # Generated avatar and brainrot mp4s
-├── firebase-credentials.json  # Service account (gitignored)
+├── scripts/queue/             # Drop script JSONs here (or let --auto)
 ├── runner.py                  # Cron entrypoint
 ├── package.json               # npm script aliases
 └── requirements.txt
 ```
 
-## Setup
+## Quick start
 
 ```bash
+# Clone and setup
+git clone https://github.com/TarunTomar122/stocksbrew-shorts.git
+cd stocksbrew-shorts
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# Required secrets (all gitignored)
-echo "RUNWAYML_API_SECRET=key_..." > .env
-echo "OPENAI_API_KEY=sk-..." >> .env
-echo "FIREBASE_CREDENTIALS_PATH=firebase-credentials.json" >> .env
-# Drop the Firebase service account JSON as firebase-credentials.json
+# Configure secrets
+cp .env.example .env
+# Edit .env with your API keys
+
+# Drop Firebase service account JSON
+# (download from Firebase Console → Project Settings → Service Accounts)
+
+# Verify connections
+npm run fb-test
+npm run buffer-test
+npm run cloudinary-test
+
+# Run the pipeline
+npm run auto
 ```
 
 ## Auto mode (the daily driver)
 
-One command pulls today's hottest tickers from stocksbrew Firebase, writes
-viral-style scripts via OpenAI, queues them, and renders the videos:
+One command pulls today's hottest tickers from Firebase, writes dialogue scripts via OpenAI, renders avatar videos, composites brainrot shorts, and schedules to YouTube + Instagram:
 
 ```bash
-npm run auto                  # 1 short from today's top heat-list ticker
+npm run auto                  # 1 short from today's top ticker
 npm run auto-batch            # 5 shorts in one go
 ```
 
@@ -73,11 +106,13 @@ npm run run -- --auto --auto-skip-existing   # don't redo tickers already queued
 ```
 
 What `--auto` does:
-1. Reads `tm_heat_list_view/US` from Firestore (top stocks worth attention today)
-2. Denormalizes each pick with `tm_latest_prices/{instrument_id}` for the % change
-3. Calls OpenAI `gpt-4o-mini` to write a 30–45 word brainrot-style script per pick
-4. Drops a script JSON into `scripts/queue/`
-5. Processes the queue: Runway avatar → Whisper subtitles → brainrot composite
+1. Reads daily anomalies + heat list from Firestore
+2. Pulls reddit buzz data for context
+3. Calls OpenAI to write a 2-4 line dialogue between rae2 and rae
+4. Generates one Runway avatar video per dialogue line, concatenates them
+5. Runs Whisper for word-level subtitle timing
+6. Composites gameplay background + speaker images + subtitles + component cards
+7. Uploads to Cloudinary and schedules to Buffer
 
 ## Manual / queue usage
 
@@ -86,8 +121,13 @@ Drop a script JSON into `scripts/queue/`:
 ```json
 {
   "id": "nvda-2026-06-18",
-  "text": "NVDA just ripped 4 percent higher and nobody saw it coming.",
-  "avatar": "rae2"
+  "dialogue": [
+    {"character": "rae2", "text": "Hey you see what Nvidia did today?"},
+    {"character": "rae", "text": "Everyone's obsessed but nobody's watching Broadcom."}
+  ],
+  "components": [
+    {"type": "big_move", "show_at": 0.1, "data": {"pct": -6.7, "direction": "down", "name": "Nvidia"}}
+  ]
 }
 ```
 
@@ -104,9 +144,9 @@ npm run queue                # dry-run, show what's queued
 
 ```bash
 # Generate a single avatar video
-npm run avatar -- --text "NVDA just ripped 4 percent higher" --avatar rae2
+npm run avatar -- --text "Nvidia just ripped higher" --avatar rae2
 
-# Compose brainrot from an existing avatar video (random bg, with subtitles)
+# Compose brainrot from an existing avatar video
 npm run brainrot -- \
   --avatar-video output/avatar-rae2-XXXXXXXX.mp4 \
   --gameplay assets/gameplay/randombg_01_26s.mp4 \
@@ -128,18 +168,20 @@ Also triggerable manually from the Actions tab.
 
 ### Setup (one-time)
 
-1. Push this repo to GitHub
-2. Go to repo **Settings → Secrets and variables → Actions**
-3. Add these **secrets**:
-   - `RUNWAYML_API_SECRET` — from your Runway dashboard
-   - `OPENAI_API_KEY` — from OpenAI dashboard
-   - `BUFFER_API_KEY` — from Buffer API settings
-   - `CLOUDINARY_CLOUD_NAME` — e.g. `di3dj38ic`
-   - `CLOUDINARY_API_KEY` — from Cloudinary dashboard
-   - `CLOUDINARY_API_SECRET` — from Cloudinary dashboard
-   - `FIREBASE_CREDENTIALS_JSON` — paste the **entire contents** of your `firebase-credentials.json` file
+1. Go to repo **Settings → Secrets and variables → Actions**
+2. Add these **Repository secrets**:
 
-4. Done. The workflow runs automatically at the scheduled times.
+| Secret | Description |
+|--------|-------------|
+| `RUNWAYML_API_SECRET` | Runway API key |
+| `OPENAI_API_KEY` | OpenAI API key |
+| `BUFFER_API_KEY` | Buffer API key |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
+| `CLOUDINARY_API_KEY` | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret |
+| `FIREBASE_CREDENTIALS_JSON` | Entire contents of your Firebase service account JSON |
+
+3. Done. The workflow runs automatically at the scheduled times.
 
 ### Manual run
 
@@ -148,22 +190,27 @@ GitHub Actions tab → "Daily Shorts Pipeline" → "Run workflow".
 ## Diagnostics
 
 ```bash
-npm run fb-test               # verify Firebase connection + heat-list freshness
+npm run fb-test               # verify Firebase connection + data freshness
+npm run buffer-test           # verify Buffer API + channel discovery
+npm run cloudinary-test       # verify Cloudinary upload works
 npm run list-avatars          # list all Runway avatars in your account
 ```
 
 ## Caching
 
-- **Whisper transcripts** → `.cache/transcripts/<videoname>.jsonl` (reused if
-  the source video hasn't changed)
-- **OpenAI scripts** → `.cache/stories/<hash>.json` (keyed on the heat-list
-  pick data, so the same ticker+signals won't re-bill OpenAI)
+- **Whisper transcripts** → `.cache/transcripts/<videoname>.jsonl` (reused if source video unchanged)
+- **OpenAI scripts** → `.cache/stories/<hash>.json` (keyed on pick data, avoids re-billing)
 
 ## Avatar name resolution
 
-`--avatar` accepts either a known short name (`rae2`, `rae`) or a raw UUID.
-To list all avatars in your Runway account:
+`--avatar` accepts either a known short name (`rae2`, `rae`) or a raw UUID. To list all avatars:
 
 ```bash
 npm run list-avatars
 ```
+
+## License
+
+MIT
+
+Built by [Tarun Tomar](https://twitter.com/tarat_211) for [StocksBrew](https://stocksbrew.online)
