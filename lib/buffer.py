@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 
 import requests
@@ -87,13 +87,16 @@ def schedule_post(
     post_type: str | None = None,
     should_share_to_feed: bool = True,
 ) -> dict:
-    """Schedule a post with a video to a specific channel.
+    """Post a video to a channel.
+
+    Uses addToQueue mode (free Buffer plan). If due_at is provided,
+    switches to customScheduled (requires paid plan).
 
     Args:
         channel_id: Buffer channel ID
         text: Post text/caption
         video_url: Public URL of the video (from Cloudinary)
-        due_at: When to publish (UTC). Defaults to 1 minute from now.
+        due_at: Optional custom schedule time (paid plan only)
         thumbnail_url: Optional public URL for video thumbnail.
         title: YouTube video title (required for YouTube)
         category_id: YouTube category ID (e.g. "28" for Science & Technology)
@@ -102,10 +105,6 @@ def schedule_post(
 
     Returns: {"id": str, "text": str, "dueAt": str} on success, or error dict.
     """
-    if due_at is None:
-        due_at = datetime.now(timezone.utc) + timedelta(minutes=1)
-    due_at_str = due_at.strftime("%Y-%m-%dT%H:%M:%S.000Z")
-
     assets = [{"video": {"url": video_url}}]
     if thumbnail_url:
         assets[0]["video"]["thumbnailUrl"] = thumbnail_url
@@ -115,17 +114,21 @@ def schedule_post(
         "text": text,
         "channelId": channel_id,
         "schedulingType": "automatic",
-        "mode": "customScheduled",
-        "dueAt": due_at_str,
+        "mode": "customScheduled" if due_at else "addToQueue",
         "assets": assets,
     }
+
+    # Add due_at only if provided (paid plan)
+    if due_at:
+        due_at_str = due_at.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        input_data["dueAt"] = due_at_str
 
     # Build metadata for service-specific fields
     metadata = {}
     if title:
         metadata["youtube"] = {
             "title": title,
-            "categoryId": category_id or "28",  # Default: Science & Technology
+            "categoryId": category_id or "28",
         }
     if post_type:
         metadata["instagram"] = {
@@ -155,7 +158,7 @@ def schedule_post(
     data = _graphql(mutation, variables)
     result = data.get("data", {}).get("createPost", {})
     if "post" in result:
-        return {"status": "scheduled", **result["post"]}
+        return {"status": "posted", **result["post"]}
     return {"status": "error", "message": result.get("message", "Unknown error")}
 
 

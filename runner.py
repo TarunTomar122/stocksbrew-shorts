@@ -26,7 +26,7 @@ import json
 import shutil
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from lib import avatar, brainrot, catalog, clipper, hosting, buffer, storygen, transcribe
@@ -139,7 +139,6 @@ def process_script(script: dict, skip_upload: bool = False) -> Path | None:
 
             # Build caption from dialogue or text
             title, description = _build_caption(script)
-            due_at = datetime.now(timezone.utc) + timedelta(minutes=1)
 
             # Combine title and description for Buffer
             caption = description if description else f"{title}\n\n#stocks #investing #shorts #stocksbrew"
@@ -148,7 +147,6 @@ def process_script(script: dict, skip_upload: bool = False) -> Path | None:
                 video_url=video_url,
                 text=caption,
                 title=title,
-                due_at=due_at,
             )
             for r in results:
                 status = r.get("status", "?")
