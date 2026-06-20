@@ -14,7 +14,8 @@ Component types:
 from __future__ import annotations
 
 import math
-import subprocess
+import os
+import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
@@ -86,7 +87,9 @@ def _wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[
 
 
 def _temp_path(prefix: str) -> Path:
-    return Path(subprocess.check_output(["mktemp", "-u", "-t", prefix]).strip().decode() + ".png")
+    fd, path = tempfile.mkstemp(suffix=".png", prefix=prefix)
+    os.close(fd)
+    return Path(path)
 
 
 def render_big_move(data: dict) -> Path:

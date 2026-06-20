@@ -4,8 +4,10 @@ Supports both single-speaker and two-character dialogue modes.
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from PIL import Image
@@ -31,7 +33,9 @@ def render_speaker(speaker: Path, frame_h: int, scale: float) -> Path:
         ratio = target_h / img.height
         target_w = int(img.width * ratio)
         img = img.resize((target_w, target_h), Image.Resampling.LANCZOS)
-    out = Path(subprocess.check_output(["mktemp", "-u", "-t", "speaker"]).strip().decode() + ".png")
+    fd, out_path = tempfile.mkstemp(suffix=".png", prefix="speaker")
+    os.close(fd)
+    out = Path(out_path)
     img.save(out)
     return out
 
@@ -95,7 +99,7 @@ def build(
         sp_w, sp_h = probe(default_png)[:2]
         default_sx, default_sy = _overlay_position(sp_w, sp_h, speaker_corner)
 
-    base = Path(subprocess.check_output(["mktemp", "-d"]).strip().decode())
+    base = Path(tempfile.mkdtemp(prefix="brainrot-"))
     all_temp_pngs: list[Path] = list(speaker_pngs.values())
     if default_png:
         all_temp_pngs.append(default_png)
