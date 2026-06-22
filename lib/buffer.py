@@ -89,8 +89,8 @@ def schedule_post(
 ) -> dict:
     """Post a video to a channel.
 
-    Uses addToQueue mode (free Buffer plan). If due_at is provided,
-    switches to customScheduled (requires paid plan).
+    Uses shareNow mode for immediate publishing. If due_at is provided,
+    switches to customScheduled.
 
     Args:
         channel_id: Buffer channel ID
@@ -114,7 +114,7 @@ def schedule_post(
         "text": text,
         "channelId": channel_id,
         "schedulingType": "automatic",
-        "mode": "customScheduled" if due_at else "addToQueue",
+        "mode": "customScheduled" if due_at else "shareNow",
         "assets": assets,
     }
 
