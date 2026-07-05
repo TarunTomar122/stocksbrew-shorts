@@ -29,7 +29,7 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from lib import avatar, brainrot, catalog, clipper, hosting, buffer, storygen, transcribe
+
 
 ROOT = Path(__file__).resolve().parent
 QUEUE = ROOT / "scripts" / "queue"
@@ -52,6 +52,7 @@ def _safe_stem(text: str, max_len: int = 30) -> str:
 
 def process_script(script: dict, skip_upload: bool = False) -> Path | None:
     """Run the full pipeline for one script. Returns output path or None on failure."""
+    from lib import avatar, brainrot, catalog, hosting, buffer, transcribe
     _setup_dirs()
     dialogue = script.get("dialogue", [])
     text = script.get("text", "").strip()
@@ -261,6 +262,7 @@ def main() -> None:
     _setup_dirs()
 
     if args.clip:
+        from lib import clipper
         if not args.clip_source:
             raise SystemExit("--clip-source is required with --clip")
         items = clipper.sample_clips(
@@ -276,7 +278,7 @@ def main() -> None:
         return
 
     if args.auto:
-        from lib import firebase
+        from lib import firebase, storygen
         _setup_dirs()
         print(f"Fetching story picks for {args.auto_market}...")
         picks = firebase.best_story_picks(args.auto_market, n=args.auto_count)
