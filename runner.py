@@ -253,8 +253,7 @@ def main() -> None:
     p.add_argument("--auto-avatar", default="rae2", help="Avatar to use for auto mode")
     p.add_argument("--auto-min-score", type=float, default=20.0,
                    help="Minimum heat_score to consider a ticker")
-    p.add_argument("--auto-skip-existing", action="store_true",
-                   help="Don't generate a script if one for the same ticker already queued today")
+
     p.add_argument("--no-upload", action="store_true",
                    help="Skip Cloudinary upload and Buffer scheduling")
     args = p.parse_args()
@@ -285,9 +284,9 @@ def main() -> None:
             print("No anomaly or reddit picks found. Run the trace-money pipeline first.")
             return
 
-        # Dedup: check both queue and done directories for today's tickers
+        # Dedup: check queue, done (7 days), and failed directories
         already_processed: set[str] = set()
-        today = datetime.now().strftime("%Y%m%d")
+        cutoff = datetime.now() - timedelta(days=7)
         for s in QUEUE.glob("*.json"):
             try:
                 data = json.loads(s.read_text())
@@ -296,8 +295,17 @@ def main() -> None:
                     already_processed.add(ticker.upper())
             except Exception:
                 pass
-        for s in DONE.glob("*.json"):
-            if today in s.name:
+        for folder in (DONE, FAILED):
+            for s in folder.glob("*.json"):
+                # filename format: <ticker>-<YYYYMMDD>-<nn>.json
+                parts = s.stem.split("-")
+                if len(parts) >= 2:
+                    try:
+                        file_date = datetime.strptime(parts[1], "%Y%m%d")
+                        if file_date < cutoff:
+                            continue
+                    except ValueError:
+                        pass
                 try:
                     data = json.loads(s.read_text())
                     ticker = data.get("ticker") or data.get("name")
@@ -309,7 +317,7 @@ def main() -> None:
         fresh = [p for p in picks if (p.get("ticker") or "").upper() not in already_processed]
         print(f"  picked: {[(p.get('name', p.get('ticker')), p.get('change_pct')) for p in picks]}")
         if already_processed:
-            print(f"  skipping (already processed today): {sorted(already_processed)}")
+            print(f"  skipping (processed in last 7 days): {sorted(already_processed)}")
 
         if not fresh:
             print("All picks already processed today. Nothing to do.")
