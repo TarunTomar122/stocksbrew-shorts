@@ -26,7 +26,7 @@ import json
 import shutil
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 
@@ -53,6 +53,7 @@ def _safe_stem(text: str, max_len: int = 30) -> str:
 def process_script(script: dict, skip_upload: bool = False) -> Path | None:
     """Run the full pipeline for one script. Returns output path or None on failure."""
     from lib import avatar, brainrot, catalog, hosting, buffer, transcribe
+    from lib import firebase
     _setup_dirs()
     dialogue = script.get("dialogue", [])
     text = script.get("text", "").strip()
@@ -155,6 +156,21 @@ def process_script(script: dict, skip_upload: bool = False) -> Path | None:
                 service = r.get("service", "?")
                 due = r.get("dueAt", "?")
                 print(f"    -> {service} ({channel}): {status} at {due}")
+
+            topic_key = script.get("topic_key")
+            if topic_key:
+                try:
+                    firebase.mark_topic_posted(
+                        topic_key,
+                        market=script.get("market", "US"),
+                        pick=script,
+                        title=title,
+                        description=description,
+                        video_url=video_url,
+                        service="buffer",
+                    )
+                except Exception as history_error:
+                    print(f"    -> topic history update failed: {history_error}")
         except Exception as e:
             print(f"    -> Upload/schedule failed: {e}")
     else:
@@ -254,6 +270,10 @@ def main() -> None:
     p.add_argument("--auto-avatar", default="rae2", help="Avatar to use for auto mode")
     p.add_argument("--auto-min-score", type=float, default=20.0,
                    help="Minimum heat_score to consider a ticker")
+    p.add_argument("--auto-history-days", type=int, default=7,
+                   help="Lookback window for skipping already-posted topics")
+    p.add_argument("--auto-skip-existing", action=argparse.BooleanOptionalAction, default=True,
+                   help="Skip topics already posted recently")
 
     p.add_argument("--no-upload", action="store_true",
                    help="Skip Cloudinary upload and Buffer scheduling")
@@ -279,6 +299,7 @@ def main() -> None:
 
     if args.auto:
         from lib import firebase, storygen
+        from lib.topic_dedup import dedupe_items, topic_fingerprint
         _setup_dirs()
         print(f"Fetching story picks for {args.auto_market}...")
         picks = firebase.best_story_picks(args.auto_market, n=args.auto_count)
@@ -286,43 +307,39 @@ def main() -> None:
             print("No anomaly or reddit picks found. Run the trace-money pipeline first.")
             return
 
-        # Dedup: check queue, done (7 days), and failed directories
-        already_processed: set[str] = set()
-        cutoff = datetime.now() - timedelta(days=7)
+        # Dedup: local queue/done/failed plus durable Firestore history.
+        blocked_keys: set[str] = set()
         for s in QUEUE.glob("*.json"):
             try:
                 data = json.loads(s.read_text())
-                ticker = data.get("ticker") or data.get("name")
-                if ticker:
-                    already_processed.add(ticker.upper())
+                key = data.get("topic_key") or topic_fingerprint(data)
+                blocked_keys.add(key)
             except Exception:
                 pass
         for folder in (DONE, FAILED):
             for s in folder.glob("*.json"):
-                # filename format: <ticker>-<YYYYMMDD>-<nn>.json
-                parts = s.stem.split("-")
-                if len(parts) >= 2:
-                    try:
-                        file_date = datetime.strptime(parts[1], "%Y%m%d")
-                        if file_date < cutoff:
-                            continue
-                    except ValueError:
-                        pass
                 try:
                     data = json.loads(s.read_text())
-                    ticker = data.get("ticker") or data.get("name")
-                    if ticker:
-                        already_processed.add(ticker.upper())
+                    key = data.get("topic_key") or topic_fingerprint(data)
+                    blocked_keys.add(key)
                 except Exception:
                     pass
 
-        fresh = [p for p in picks if (p.get("ticker") or "").upper() not in already_processed]
+        if args.auto_skip_existing:
+            for pick in picks:
+                key = topic_fingerprint(pick)
+                if firebase.is_recent_topic(key, cooldown_days=args.auto_history_days):
+                    blocked_keys.add(key)
+
+        fresh = dedupe_items(picks, blocked_keys)
         print(f"  picked: {[(p.get('name', p.get('ticker')), p.get('change_pct')) for p in picks]}")
-        if already_processed:
-            print(f"  skipping (processed in last 7 days): {sorted(already_processed)}")
+        if blocked_keys:
+            print(f"  skipping already-seen topics: {len(blocked_keys)} blocked")
+        if args.auto_skip_existing:
+            print(f"  durable cooldown: {args.auto_history_days} days")
 
         if not fresh:
-            print("All picks already processed today. Nothing to do.")
+            print("No fresh topics after dedupe. Nothing to do.")
             return
 
         print("Generating scripts via OpenAI...")
@@ -337,12 +354,18 @@ def main() -> None:
                 "dialogue": pick.get("dialogue", []),
                 "text": pick.get("script", ""),  # fallback for single-speaker
                 "avatar": args.auto_avatar,
+                "market": args.auto_market,
                 "ticker": pick.get("ticker"),
                 "name": pick.get("name"),
                 "change_pct": pick.get("change_pct"),
                 "source": pick.get("source", "auto"),
                 "title": pick.get("title", ""),
                 "description": pick.get("description", ""),
+                "headline": pick.get("headline", ""),
+                "catalyst": pick.get("catalyst", ""),
+                "thesis": pick.get("thesis", ""),
+                "overall_label": pick.get("overall_label", ""),
+                "topic_key": pick.get("topic_key"),
             }, indent=2))
             print(f"  queued {sid}")
 

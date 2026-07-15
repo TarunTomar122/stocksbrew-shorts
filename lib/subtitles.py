@@ -36,6 +36,7 @@ def build_chain(words: list[dict], top_margin: int, last_label: str,
         out = f"s{i+1}"
         parts.append(
             f"[{prev}]drawtext={font_arg}text='{text}':"
+            f"expansion=none:"
             f"fontsize={fontsize}:fontcolor={color}:borderw={border_w}:bordercolor=black:"
             f"x=(w-text_w)/2:y={top_margin}:"
             f"enable='between(t,{start:.3f},{end:.3f})'"

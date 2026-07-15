@@ -2,7 +2,25 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
+
+
+def merge_numeric_fragments(words: list[dict]) -> list[dict]:
+    """Rejoin decimals and percentages split by Whisper word timestamps."""
+    merged: list[dict] = []
+    for word in words:
+        current = dict(word)
+        if (
+            merged
+            and re.search(r"\d$", merged[-1]["word"])
+            and re.match(r"^(?:[.,]\d|%)", current["word"])
+        ):
+            merged[-1]["word"] += current["word"]
+            merged[-1]["end"] = current["end"]
+        else:
+            merged.append(current)
+    return merged
 
 
 def transcribe_words(video: Path) -> list[dict]:
@@ -47,7 +65,7 @@ def cached(video: Path, cache_dir: Path) -> list[dict] | None:
 def transcribe_with_cache(video: Path, cache_dir: Path) -> list[dict]:
     words = cached(video, cache_dir)
     if words is not None:
-        return words
-    words = transcribe_words(video)
+        return merge_numeric_fragments(words)
+    words = merge_numeric_fragments(transcribe_words(video))
     write_jsonl(words, cache_dir / (video.stem + ".jsonl"))
     return words

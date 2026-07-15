@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +20,7 @@ load_dotenv(ROOT / ".env")
 
 _firebase_app = None
 _firestore_client = None
+SHORT_TOPIC_HISTORY_COLLECTION = "tm_short_topic_history"
 
 
 def _ensure_app():
@@ -51,6 +52,12 @@ def _ensure_app():
 
 def _doc_to_dict(doc) -> dict[str, Any]:
     return doc.to_dict() or {}
+
+
+def _coerce_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return None
 
 
 def get_heat_list(market: str = "US") -> dict[str, Any] | None:
@@ -292,3 +299,54 @@ def smoke_test() -> dict[str, Any]:
         ],
         "now": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def get_topic_history(topic_key: str) -> dict[str, Any] | None:
+    """Return durable history for a topic fingerprint, if present."""
+    db = _ensure_app()
+    doc = db.collection(SHORT_TOPIC_HISTORY_COLLECTION).document(topic_key).get()
+    return _doc_to_dict(doc) if doc.exists else None
+
+
+def is_recent_topic(topic_key: str, *, cooldown_days: int = 7) -> bool:
+    """True when this topic has been posted within the cooldown window."""
+    history = get_topic_history(topic_key)
+    if not history:
+        return False
+
+    posted_at = _coerce_datetime(history.get("last_posted_at") or history.get("posted_at"))
+    if posted_at is None:
+        return True
+    return posted_at >= datetime.now(timezone.utc) - timedelta(days=cooldown_days)
+
+
+def mark_topic_posted(
+    topic_key: str,
+    *,
+    market: str,
+    pick: dict[str, Any],
+    title: str,
+    description: str,
+    video_url: str | None = None,
+    service: str | None = None,
+) -> None:
+    """Persist the fact that a topic was posted so future runs can skip it."""
+    db = _ensure_app()
+    now = datetime.now(timezone.utc)
+    payload: dict[str, Any] = {
+        "topic_key": topic_key,
+        "market": market.upper(),
+        "ticker": pick.get("ticker"),
+        "name": pick.get("name"),
+        "headline": pick.get("headline"),
+        "catalyst": pick.get("catalyst"),
+        "thesis": pick.get("thesis"),
+        "source": pick.get("source"),
+        "title": title,
+        "description": description,
+        "video_url": video_url,
+        "service": service,
+        "last_posted_at": now,
+        "updated_at": now,
+    }
+    db.collection(SHORT_TOPIC_HISTORY_COLLECTION).document(topic_key).set(payload, merge=True)

@@ -24,7 +24,7 @@ Automated short-form video pipeline that generates brainrot-style finance shorts
 
 - **Python 3.11** — core pipeline
 - **Runway ML** — avatar video generation (`gwm1_avatars`)
-- **OpenAI** — script generation (`gpt-4o-mini`)
+- **OpenAI** — script generation (`gpt-4.1-mini`)
 - **Firebase Admin** — Firestore data (anomalies, heat list, reddit)
 - **faster-whisper** — word-level transcription for subtitles
 - **Pillow** — visual component card rendering
@@ -102,17 +102,17 @@ Flags for finer control:
 
 ```bash
 npm run run -- --auto --auto-count 3 --auto-market US --auto-min-score 30
-npm run run -- --auto --auto-skip-existing   # don't redo tickers already queued today
+npm run run -- --auto --auto-skip-existing   # skip topics already posted in the cooldown window
 ```
 
 What `--auto` does:
 1. Reads daily anomalies + heat list from Firestore
 2. Pulls reddit buzz data for context
-3. Calls OpenAI to write a 2-4 line dialogue between rae2 and rae
+3. Calls OpenAI to write a natural 2-5 turn conversation between rae2 and rae
 4. Generates one Runway avatar video per dialogue line, concatenates them
 5. Runs Whisper for word-level subtitle timing
 6. Composites gameplay background + speaker images + subtitles + component cards
-7. Uploads to Cloudinary and schedules to Buffer
+7. Skips topics already recorded in Firestore, then uploads to Cloudinary and schedules to Buffer
 
 ## Manual / queue usage
 

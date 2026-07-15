@@ -7,8 +7,8 @@ CHARACTERS:
   like "Ugh, please. Everyone's obsessed with Nvidia but nobody's watching
   Broadcom" or "Oh please, this dip is a gift wrapped in red ink."
 
-Each script is a 2-4 line dialogue between them. Total 30-45 words across
-all lines combined.
+Each script is a short, natural conversation with uneven turns. One character
+can ask a quick question and the other can give a longer explanation.
 
 KEY RULE: scripts use COMPANY NAMES, never ticker symbols (Runway can't
 pronounce "AMAT" — use "Applied Materials" instead).
@@ -27,22 +27,29 @@ CACHE_DIR = ROOT / ".cache" / "stories"
 
 load_dotenv(ROOT / ".env")
 
-SYSTEM_PROMPT = """You write 30-45 word DIALOGUE scripts for viral finance shorts (TikTok/YouTube Shorts), PLUS choose visual component cards to pop up during the video.
+SYSTEM_PROMPT = """You write natural 35-60 word conversations for finance shorts.
 
 Two characters talk to each other about a stock story:
 - rae2: Blunt, casual, sets up the topic. Like a friend who just saw something wild and needs to share it. "Hey you see what Nvidia did today?" / "Bro this stock just tanked".
 - rae: Clever, sarcastic, delivers the insight. Knows more than rae2 and loves showing it. "Ugh, please. Everyone's obsessed with Nvidia but nobody watching Broadcom." / "Oh please, this dip is a gift wrapped in red ink."
 
-ABSOLUTE RULES FOR DIALOGUE:
+GOAL:
+- Entertain while teaching one useful investor insight.
+- Explain why the stock moved, the business mechanism behind it, and what still needs to be proven.
+
+ABSOLUTE RULES:
 1. Use the COMPANY NAME, never the ticker symbol. "Nvidia" not "NVDA".
-2. Tell a STORY through the conversation. rae2 sets up, rae delivers the punch.
-3. 2-4 lines total, alternating between rae2 and rae. Each line is 8-20 words.
-4. 30-45 words TOTAL across all lines combined.
-5. Sound like two friends talking — casual, funny, opinionated.
-6. At most ONE number across all lines (e.g. "dropped 13 percent"). Zero is fine.
+2. Write 2-5 alternating turns with UNEVEN lengths. At least one turn must be a substantial 2-3 sentence explanation and at least one must be a short reaction.
+3. Every reply must react to the previous line. Do not write alternating mini-monologues.
+4. Mid-conversation questions are welcome, but the final line must be a declarative takeaway.
+5. Sound like two smart friends talking — casual, funny, opinionated, and specific.
+6. At most ONE number across the whole conversation. Zero is fine.
 7. BANNED PHRASES — never use any of these: "reported earnings", "beating estimates", "EPS", "RSI", "overbought", "overheated", "valuation", "catalyst", "thesis", "is on fire", "heating up", "here's the kicker", "here's the twist", "here's the deal", "here's the scoop", "hold up", "interesting times", "stay tuned", "we'll see", "let's see", "don't be fooled", "the real question is", "crucial moment", "buckle up", "for the ride", "wishful thinking", "putting them to the test", "riding the wave", "shine is fading".
-8. The LAST line should feel like a mic drop — a punchy observation, not a question or teaser.
-9. VARY the dynamic: sometimes rae2 is the one who knows, sometimes rae is surprised. Don't always have the same pattern.
+8. VARY the structure and dynamic. Either character may open, explain, misunderstand, or land the final line.
+9. Never tell viewers to buy, sell, or hold.
+10. Never write four similarly sized one-sentence turns. Do not begin a reply with empty agreement such as "Exactly", "Yeah", "You bet", "Right", or "Totally".
+
+FINAL CHECK: silently rewrite the conversation if it is symmetrical, contains a banned phrase, ends with a question or hedge, or lacks one concrete business insight.
 
 OUTPUT FORMAT — return valid JSON only, no markdown, no code fences:
 {
@@ -65,14 +72,45 @@ DESCRIPTION RULES:
 
 FEW_SHOT = [
     {
-        "user": "Company: Oracle. Move: -13%. Context: Stock crashed after earnings but cloud revenue hit a record high. The CEO is betting everything on AI infrastructure. Sector: Technology. Verdict: growth.",
-        "assistant": """{"dialogue": [{"character": "rae2", "text": "Bro Oracle just tanked 13 percent after earnings."}, {"character": "rae", "text": "Oh please. Their cloud revenue just hit a record and Larry Ellison is literally betting the company on AI."}, {"character": "rae2", "text": "So you're saying buy the dip?"}, {"character": "rae", "text": "This dip is a gift wrapped in red ink."}], "title": "Oracle Tanked 13% - But Here is Why Its a Gift", "description": "Oracle crashed after earnings but cloud revenue hit records. Is this dip a gift? #stocks #investing #shorts #stocksbrew"}""",
+        "user": "Company: Oracle. Move: down sharply. Context: The quarter disappointed traders, but cloud revenue hit a record and the company is spending heavily on AI infrastructure.",
+        "assistant": """{"dialogue": [{"character": "rae2", "text": "Oracle fell hard. Is the cloud story actually breaking?"}, {"character": "rae", "text": "Not necessarily. The quarter disappointed traders, but cloud revenue still hit a record. The risk is whether all that AI infrastructure spending turns into profitable growth."}, {"character": "rae2", "text": "So Wall Street punished the bill before seeing what it bought."}, {"character": "rae", "text": "Now the cloud business has to earn its price tag."}], "title": "Oracle's Cloud Story Has Something to Prove", "description": "Oracle's cloud revenue is growing, but its AI spending now needs to produce real profits. #stocks #investing #shorts #stocksbrew"}""",
     },
     {
-        "user": "Company: Cloudflare. Move: -23%. Context: Company slashed 20 percent of workforce and gave weak guidance. Reddit is buzzing with 140 posts. Sector: Technology. Verdict: bearish.",
-        "assistant": """{"dialogue": [{"character": "rae2", "text": "Yo Cloudflare just crashed 23 percent. They fired a fifth of the company."}, {"character": "rae", "text": "And the guidance was brutal. But they're still the backbone of half the internet."}, {"character": "rae2", "text": "So falling knife or screaming buy?"}, {"character": "rae", "text": "That's the million dollar question nobody wants to answer."}], "title": "Cloudflare Crashed 23% - Falling Knife or Buy?", "description": "Cloudflare fired 20% and crashed. Reddit buzzing. Falling knife or buy? #stocks #investing #shorts #stocksbrew"}""",
+        "user": "Company: Cloudflare. Context: The company cut a fifth of its workforce and issued weak guidance, but its network remains widely used.",
+        "assistant": """{"dialogue": [{"character": "rae", "text": "Cloudflare cut a fifth of its workforce and gave investors weak guidance."}, {"character": "rae2", "text": "That sounds less like efficiency and more like management pulling the fire alarm."}, {"character": "rae", "text": "Maybe. The network is still valuable, but the business must prove those cuts protect margins without choking growth."}], "title": "Cloudflare's Cuts Come With a Cost", "description": "Cloudflare is cutting deeply. Now it must protect margins without weakening future growth. #stocks #investing #shorts #stocksbrew"}""",
     },
 ]
+
+_BANNED_OUTPUT = (
+    "secret sauce",
+    "we'll see",
+    "we will see",
+    "you bet",
+    "exactly",
+    "game changer",
+    "what's next",
+    "just hype",
+)
+
+
+def dialogue_issues(dialogue: list[dict]) -> list[str]:
+    """Return concrete reasons a generated conversation should be rejected."""
+    issues: list[str] = []
+    text = " ".join(str(line.get("text", "")) for line in dialogue).lower()
+    lengths = [len(str(line.get("text", "")).split()) for line in dialogue]
+
+    if not 2 <= len(dialogue) <= 5:
+        issues.append("use 2-5 dialogue turns")
+    if any(line.get("character") not in {"rae", "rae2"} for line in dialogue):
+        issues.append("use only rae and rae2")
+    if dialogue and str(dialogue[-1].get("text", "")).rstrip().endswith("?"):
+        issues.append("end with a declarative takeaway")
+    if lengths and (max(lengths) < 18 or min(lengths) > 12):
+        issues.append("use uneven turns with one substantial explanation and one short reaction")
+    for phrase in _BANNED_OUTPUT:
+        if phrase in text:
+            issues.append(f"remove banned phrase: {phrase}")
+    return issues
 
 
 def _client():
@@ -83,8 +121,8 @@ def _client():
     return OpenAI(api_key=key)
 
 
-def _cache_key(pick: dict) -> str:
-    raw = json.dumps(pick, sort_keys=True, default=str)
+def _cache_key(pick: dict, model: str) -> str:
+    raw = json.dumps({"model": model, "prompt": SYSTEM_PROMPT, "pick": pick}, sort_keys=True, default=str)
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
@@ -132,12 +170,12 @@ def _format_pick(pick: dict) -> str:
     return "\n".join(lines)
 
 
-def generate_script(pick: dict, *, model: str = "gpt-4o-mini") -> dict:
+def generate_script(pick: dict, *, model: str = "gpt-4.1-mini") -> dict:
     """Generate a dialogue script + component cards for one story pick.
 
     Returns: {"dialogue": [{"character": str, "text": str}, ...], "components": [...], ...pick_fields}
     """
-    key = _cache_key(pick)
+    key = _cache_key(pick, model)
     cached = _read_cache(key)
     if cached:
         return json.loads(cached)
@@ -151,36 +189,36 @@ def generate_script(pick: dict, *, model: str = "gpt-4o-mini") -> dict:
         messages.append({"role": "assistant", "content": shot["assistant"]})
     messages.append({"role": "user", "content": user_msg})
 
-    resp = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        max_tokens=400,
-        temperature=0.9,
-        response_format={"type": "json_object"},
-    )
-    raw = (resp.choices[0].message.content or "").strip()
+    parsed = None
+    for attempt in range(2):
+        resp = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=400,
+            temperature=0.7 if attempt == 0 else 0.4,
+            response_format={"type": "json_object"},
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        try:
+            candidate = json.loads(raw)
+        except json.JSONDecodeError:
+            candidate = {}
 
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        # Fallback: wrap as single rae2 line
-        parsed = {"dialogue": [{"character": "rae2", "text": raw.strip().strip('"')}], "components": []}
+        issues = dialogue_issues(candidate.get("dialogue") or [])
+        if not issues:
+            parsed = candidate
+            break
+        messages.extend([
+            {"role": "assistant", "content": raw},
+            {"role": "user", "content": "Rejected: " + "; ".join(issues) + ". Rewrite the complete JSON."},
+        ])
+
+    if parsed is None:
+        raise ValueError("generated dialogue failed quality checks")
 
     dialogue = parsed.get("dialogue", [])
     title = parsed.get("title", "")
     description = parsed.get("description", "")
-
-    # Validate dialogue
-    if not dialogue:
-        dialogue = [{"character": "rae2", "text": _fallback_script(pick)}]
-
-    # Total word count guard
-    total_words = sum(len(line.get("text", "").split()) for line in dialogue)
-    if total_words > 60:
-        # Trim last line
-        last = dialogue[-1].get("text", "")
-        words = last.split()
-        dialogue[-1]["text"] = " ".join(words[:12]).rstrip(",.") + "."
 
     result = {**pick, "dialogue": dialogue, "title": title, "description": description}
 
@@ -188,7 +226,7 @@ def generate_script(pick: dict, *, model: str = "gpt-4o-mini") -> dict:
     return result
 
 
-def generate_scripts(picks: list[dict], *, model: str = "gpt-4o-mini") -> list[dict]:
+def generate_scripts(picks: list[dict], *, model: str = "gpt-4.1-mini") -> list[dict]:
     """Generate dialogue scripts + components for many picks, preserving order."""
     out = []
     for i, pick in enumerate(picks, 1):
@@ -202,7 +240,6 @@ def generate_scripts(picks: list[dict], *, model: str = "gpt-4o-mini") -> list[d
             out.append(result)
         except Exception as e:
             print(f"  [{i}/{len(picks)}] {pick.get('name', pick.get('ticker', '?'))}: FAILED ({e})")
-            out.append({**pick, "dialogue": [{"character": "rae2", "text": _fallback_script(pick)}], "components": []})
     return out
 
 
