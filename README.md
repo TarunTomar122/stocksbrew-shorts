@@ -182,6 +182,9 @@ mechanism, checkpoint, or invalidation proof cards instead of repeating one
 generic quote-card treatment. Every experiment script must contain 56-70 words,
 which maps to roughly 19-26 seconds at the observed avatar speech rate and keeps
 it near the 23.5-second first control.
+New-format scripts are deterministic and use the anomaly's stored proof,
+checkpoint, and invalidation fields; baseline slots retain the existing AI
+dialogue as controls.
 
 Firestore keeps one active assignment and a 48-hour Buffer scheduling gate, so the
 four daily cron checks cannot create a burst. Generated scripts, variants,

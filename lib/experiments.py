@@ -20,23 +20,23 @@ _FORMAT_PROMPTS = {
     "baseline_dialogue": "",
     "move_mechanism": (
         "Open with the exact company and percentage move, then the contradiction. "
-        "Explain one mechanism behind the move. Use the move percentage as the only "
-        "number and one provided fact as proof. "
+        "Explain one mechanism behind the move. Use one provided proof number at "
+        "most and never invent one. "
         "Use one sentence and one causal claim per turn. End with one checkpoint. "
         "Title the exact move or mechanism. "
         "Never say buy, sell, or hold."
     ),
     "catalyst_checkpoint": (
         "Open with the exact company and percentage move, then the catalyst. "
-        "Use the move percentage as the only number and one provided fact as proof. "
+        "Use one provided proof number at most and never invent one. "
         "Use one sentence and one causal claim per turn, then end "
         "with the next dated or measurable checkpoint. Title the catalyst, not a "
         "generic question. Never say buy, sell, or hold."
     ),
     "radar_invalidation": (
         "Open with the exact company and percentage move, then the market's apparent "
-        "belief. Use the move percentage as the only number, then identify the single "
-        "provided fact that would invalidate that belief. Use one sentence and one "
+        "belief. Use at most one supplied invalidation number, then identify the "
+        "single provided fact that would invalidate that belief. Use one sentence and one "
         "causal claim per turn. Title the contradiction or invalidation. "
         "Never say buy, sell, or hold."
     ),
@@ -134,6 +134,7 @@ def build_components(pick: dict[str, Any], variant: str) -> list[dict[str, Any]]
         or pick.get("thesis")
         or "Watch whether the move holds"
     )
+    proof = pick.get("proof") or checkpoint
     first_line = str(((pick.get("dialogue") or [{}])[0]).get("text") or "")
     match = _CONTRADICTION.search(first_line)
     contradiction = first_line[match.start():] if match else pick.get("headline") or thesis
@@ -157,7 +158,7 @@ def build_components(pick: dict[str, Any], variant: str) -> list[dict[str, Any]]
             {
                 "type": "context_quote",
                 "show_at": 0.48,
-                "data": {"source": "PROOF TO WATCH", "text": _short_text(checkpoint)},
+                "data": {"source": "CONCRETE PROOF", "text": _short_text(proof)},
             },
         ]
     if variant == "catalyst_checkpoint":

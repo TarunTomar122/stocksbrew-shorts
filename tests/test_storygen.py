@@ -15,16 +15,15 @@ from lib.storygen import (
 
 class DialogueQualityTest(unittest.TestCase):
     def test_experiment_prompt_has_one_duration_contract(self) -> None:
-        prompt = _system_prompt({"format_variant": "move_mechanism"})
+        prompt = _system_prompt({"format_variant": "baseline_dialogue"})
 
         self.assertIn("56-70 word", prompt)
         self.assertNotIn("35-60 word", prompt)
-        self.assertNotIn("2-3 sentence explanation", prompt)
         self.assertNotIn("Screaming Buy", prompt)
-        self.assertIn("one 8-12 word reaction", prompt)
+        self.assertIn("say the cause is not established", prompt)
         self.assertIn(
             "exactly four turns",
-            _format_pick({"format_variant": "move_mechanism"}),
+            _format_pick({"format_variant": "baseline_dialogue"}),
         )
 
     def test_experiment_requires_exact_first_line_and_no_advice(self) -> None:
@@ -79,7 +78,7 @@ class DialogueQualityTest(unittest.TestCase):
             ],
         }
         self.assertIn(
-            "use the verified move percentage as the only number",
+            "use only the verified move and one supplied proof number",
             experiment_issues(invented_number, pick),
         )
 
@@ -117,7 +116,7 @@ class DialogueQualityTest(unittest.TestCase):
         client.assert_called_once()
 
     def test_cached_result_does_not_validate_its_input_fields(self) -> None:
-        pick = {"name": "Tesla", "change_pct": -14.5, "format_variant": "move_mechanism"}
+        pick = {"name": "Tesla", "change_pct": -14.5, "format_variant": "baseline_dialogue"}
         cached = json.dumps(
             {
                 **pick,
@@ -139,6 +138,40 @@ class DialogueQualityTest(unittest.TestCase):
             result = generate_script(pick)
 
         self.assertEqual(result["title"], "Tesla's 14.5% Capex Contradiction")
+        client.assert_not_called()
+
+    def test_new_variants_use_grounded_templates_without_openai(self) -> None:
+        pick = {
+            "name": "Rocket Lab Corporation",
+            "ticker": "RKLB",
+            "change_pct": -8.7,
+            "headline": "Contract win can't stop the slide yet",
+            "catalyst": "Contract execution",
+            "thesis": "Great business, terrible price action",
+            "proof": "The $266M contract is Rocket Lab's largest ever",
+            "checkpoint": "Contract execution progress over the next quarter",
+            "invalidation": "Break below $60",
+        }
+        with patch("lib.storygen._client") as client:
+            for variant in (
+                "move_mechanism",
+                "catalyst_checkpoint",
+                "radar_invalidation",
+            ):
+                with self.subTest(variant=variant):
+                    result = generate_script({**pick, "format_variant": variant})
+                    candidate = {
+                        field: result[field]
+                        for field in ("dialogue", "title", "description")
+                    }
+                    self.assertEqual(experiment_issues(candidate, result), [])
+                    self.assertTrue(
+                        any(
+                            fact in json.dumps(candidate)
+                            for fact in ("$266M", "next quarter", "$60")
+                        )
+                    )
+
         client.assert_not_called()
 
     def test_rejects_formulaic_dialogue(self) -> None:

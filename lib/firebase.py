@@ -241,6 +241,29 @@ def best_story_picks(market: str = "US", n: int = 5) -> list[dict[str, Any]]:
     # 1. Daily anomalies — these already have headlines, catalysts, theses
     anomalies = get_daily_anomalies(market, limit=n * 2)
     for a in anomalies:
+        visual = a.get("visual_summary") or {}
+        catalyst_cards = visual.get("catalyst_cards") or []
+        risk_cards = visual.get("risk_cards") or []
+        key_points = a.get("key_points") or []
+        proof = (
+            str(key_points[0])
+            .split(" — ", 1)[0]
+            .split(" but ", 1)[0]
+            .rstrip(" ,;:-")
+            if key_points
+            else None
+        )
+        catalyst_card = catalyst_cards[0] if catalyst_cards else {}
+        event = catalyst_card.get("event") or a.get("catalyst")
+        window = catalyst_card.get("window")
+        checkpoint = (
+            f"{event} progress over the next {window}"
+            if event and window in {"week", "quarter", "year"}
+            else f"{event} progress"
+            if event
+            else None
+        )
+        risk_card = risk_cards[0] if risk_cards else {}
         picks.append({
             "ticker": a.get("ticker"),
             "name": a.get("name") or a.get("ticker"),
@@ -251,6 +274,9 @@ def best_story_picks(market: str = "US", n: int = 5) -> list[dict[str, Any]]:
             "sector": a.get("sector"),
             "direction": a.get("direction"),
             "overall_label": a.get("overall_label"),
+            "proof": proof,
+            "checkpoint": checkpoint,
+            "invalidation": risk_card.get("trigger") or a.get("risk"),
             "source": "anomaly",
         })
 

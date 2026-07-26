@@ -94,7 +94,10 @@ _BANNED_OUTPUT = (
 )
 _INVESTMENT_ADVICE = re.compile(r"\b(?:buy(?:ing)?|sell(?:ing)?|hold)\b", re.I)
 _LEGAL_NAME_WORDS = {"the", "inc", "corp", "corporation", "company", "class"}
-_NUMBER_MENTION = re.compile(r"\b\d+(?:\.\d+)?%?")
+_NUMBER_MENTION = re.compile(
+    r"(?<!\w)\$?\d+(?:\.\d+)?(?:-\d+(?:\.\d+)?)?(?:%|[KMBX])?",
+    re.I,
+)
 _CONTRADICTION = re.compile(
     r"\b(?:despite|but|yet|although|while|even\s+(?:after|though|with)|"
     r"can't|cannot|couldn't|fails?\s+to)\b",
@@ -157,15 +160,25 @@ def experiment_issues(candidate: dict, pick: dict) -> list[str]:
                 f"use 56-70 words to keep experiment durations comparable "
                 f"(got {word_count})"
             )
-        if len(_NUMBER_MENTION.findall(dialogue_text)) > 1:
-            issues.append("use the verified move percentage as the only number")
+        allowed_numbers = {f"{abs(float(pick.get('change_pct') or 0)):.1f}%"}
+        allowed_numbers.update(
+            _NUMBER_MENTION.findall(
+                " ".join(
+                    str(pick.get(field) or "")
+                    for field in ("proof", "checkpoint", "invalidation")
+                )
+            )
+        )
+        mentions = _NUMBER_MENTION.findall(dialogue_text)
+        if len(mentions) > 2 or any(number not in allowed_numbers for number in mentions):
+            issues.append("use only the verified move and one supplied proof number")
     if not variant or variant == "baseline_dialogue":
         return issues
 
     dialogue = candidate.get("dialogue") or []
     first = str(dialogue[0].get("text", "")) if dialogue else ""
     pct = pick.get("change_pct")
-    if name and name.lower() not in first.lower():
+    if name_words and not all(word in first.lower() for word in name_words):
         issues.append("put the exact company name in the first spoken line")
     if pct is not None and f"{abs(float(pct)):.1f}%" not in first:
         issues.append("put the exact percentage move in the first spoken line")
@@ -196,29 +209,29 @@ def _system_prompt(pick: dict) -> str:
         "Falling Knife or Screaming Buy?",
         "Temporary Shock or Deeper Problem?",
         1,
+    ).replace(
+        "- Explain why the stock moved, the business mechanism behind it, and what "
+        "still needs to be proven.",
+        "- Explain only the supplied move, headline, catalyst, and angle. If those "
+        "facts do not establish a cause, say the cause is not established.",
+        1,
+    ).replace(
+        "casual, funny, opinionated, and specific",
+        "casual, clear, evidence-bound, and specific",
+        1,
+    ).replace(
+        "At most ONE number across the whole conversation. Zero is fine.",
+        "At most TWO numbers across the whole conversation: the exact move and one "
+        "supplied proof or invalidation number.",
+        1,
     )
     duration_rule = (
         "\nCONTROLLED EXPERIMENT: Use 56-70 words total so every format has a "
         "comparable duration. Use only facts supplied in the user message; never "
-        "invent a metric, estimate, date, event, or claim."
+        "invent a metric, estimate, date, event, claim, deal importance, delay, "
+        "revenue effect, motive, forecast, or operational detail."
     )
-    if variant == "baseline_dialogue":
-        return prompt + duration_rule
-    prompt = prompt.replace(
-        "Write 2-5 alternating turns with UNEVEN lengths. At least one turn must "
-        "be a substantial 2-3 sentence explanation and at least one must be a "
-        "short reaction.",
-        "Write 3-5 alternating one-sentence turns with UNEVEN lengths, including "
-        "one substantial explanation and one short reaction.",
-        1,
-    )
-    return prompt + duration_rule + (
-        "\nEXPERIMENT OVERRIDE: Every turn must be exactly one sentence carrying "
-        "one causal claim. Include one 8-12 word reaction and one 18-24 word "
-        "explanation. The first sentence must contain the exact company, "
-        "percentage move, and a clear contradiction such as despite, yet, even "
-        "after, or can't."
-    )
+    return prompt + duration_rule
 
 
 def _cache_key(pick: dict, model: str) -> str:
@@ -261,6 +274,12 @@ def _format_pick(pick: dict) -> str:
 
     if pick.get("thesis"):
         lines.append(f"Angle: {pick['thesis']}")
+    if pick.get("proof"):
+        lines.append(f"Provided proof: {pick['proof']}")
+    if pick.get("checkpoint"):
+        lines.append(f"Provided checkpoint: {pick['checkpoint']}")
+    if pick.get("invalidation"):
+        lines.append(f"Provided invalidation: {pick['invalidation']}")
 
     if pick.get("reddit_posts"):
         lines.append(f"Reddit buzz: {pick['reddit_posts']} posts")
@@ -276,11 +295,143 @@ def _format_pick(pick: dict) -> str:
     if pick.get("format_variant"):
         lines.append(
             "Required turn plan: exactly four turns with 12-14, 18-22, 8-12, "
-            "and 18-22 words respectively; use no numeric value except the supplied "
-            "move percentage."
+            "and 18-22 words respectively; use only the supplied move percentage "
+            "and at most one supplied proof or invalidation number."
         )
 
     return "\n".join(lines)
+
+
+def _fact_fragment(
+    value: object,
+    max_words: int,
+    *,
+    keep_first_number: bool = False,
+) -> str:
+    seen_number = False
+
+    def replace_number(match: re.Match) -> str:
+        nonlocal seen_number
+        if keep_first_number and not seen_number:
+            seen_number = True
+            return match.group(0)
+        return ""
+
+    text = _NUMBER_MENTION.sub(replace_number, str(value or ""))
+    text = re.sub(r"[.!?]+", "", text)
+    text = re.sub(r"\s+", " ", text).strip(" ,:;-")
+    text = re.sub(r"\byet$", "", text, flags=re.I).strip(" ,:;-")
+    return " ".join(text.split()[:max_words])
+
+
+def _grounded_experiment_script(pick: dict) -> dict:
+    variant = pick["format_variant"]
+    if variant not in {
+        "move_mechanism",
+        "catalyst_checkpoint",
+        "radar_invalidation",
+    }:
+        raise ValueError(f"No grounded template for {variant}")
+
+    raw_name = str(pick.get("name") or pick.get("ticker") or "This company")
+    name = re.sub(
+        r"\s+(?:inc|corp|corporation|ltd|limited|plc)\.?$",
+        "",
+        raw_name,
+        flags=re.I,
+    )
+    move = float(pick.get("change_pct") or 0)
+    verb = "rose" if move >= 0 else "fell"
+    headline = _fact_fragment(
+        pick.get("headline") or pick.get("catalyst") or pick.get("thesis"),
+        8,
+    )
+    catalyst = _fact_fragment(pick.get("catalyst") or headline, 6)
+    thesis = _fact_fragment(pick.get("thesis") or headline, 8)
+    proof = _fact_fragment(
+        pick.get("proof") or pick.get("catalyst") or headline,
+        10,
+        keep_first_number=True,
+    )
+    checkpoint = _fact_fragment(pick.get("checkpoint") or thesis, 9)
+    invalidation = _fact_fragment(
+        pick.get("invalidation") or catalyst,
+        8,
+        keep_first_number=True,
+    )
+    catalyst_phrase = (
+        catalyst
+        if catalyst.split()[0].isupper()
+        else f"{catalyst[0].lower()}{catalyst[1:]}"
+    )
+    checkpoint_phrase = (
+        checkpoint
+        if checkpoint.split()[0].isupper()
+        else f"{checkpoint[0].lower()}{checkpoint[1:]}"
+    )
+    invalidation_phrase = (
+        invalidation
+        if invalidation.split()[0].isupper()
+        else f"{invalidation[0].lower()}{invalidation[1:]}"
+    )
+    if invalidation_phrase.lower().startswith("break "):
+        invalidation_phrase = f"a {invalidation_phrase}"
+    first = f"{name} {verb} {abs(move):.1f}%, yet {headline.lower()}."
+
+    if variant == "move_mechanism":
+        lines = [
+            first,
+            f"{proof}, and that is the concrete fact behind this mechanism.",
+            "So the headline landed, and the stock still disagreed.",
+            f"The next checkpoint is {checkpoint_phrase}, keeping the claim tied to the current evidence.",
+        ]
+        title = f"{name} {verb.title()} {abs(move):.1f}%: {catalyst}"
+    elif variant == "catalyst_checkpoint":
+        lines = [
+            first,
+            f"The stated catalyst is {catalyst_phrase}, backed by one concrete fact: {proof}.",
+            "That gives viewers a catalyst, not a conclusion.",
+            f"The next checkpoint is {checkpoint_phrase}, which keeps the claim tied to the current evidence.",
+        ]
+        title = f"{name}: {catalyst} After an {abs(move):.1f}% Move"
+    else:
+        lines = [
+            first,
+            f'The market belief being tested is "{thesis}," because that is the angle in the current data.',
+            "The price move is the warning, not the verdict.",
+            f"The named invalidation is {invalidation_phrase}, which would break that market belief without adding another story.",
+        ]
+        title = f"{name} {abs(move):.1f}% Move vs {thesis}"
+
+    word_count = sum(len(line.split()) for line in lines)
+    if word_count < 56:
+        lines[-1] = (
+            lines[-1].rstrip(".")
+            + ", without assuming facts the current data does not provide."
+        )
+
+    dialogue = [
+        {"character": "rae2" if index % 2 == 0 else "rae", "text": line}
+        for index, line in enumerate(lines)
+    ]
+    if len(title) > 60:
+        title = f"{title[:59].rstrip()}…"
+    hashtags = "#stocks #investing #shorts #stocksbrew"
+    description = (
+        f"{name} moved {abs(move):.1f}%. Catalyst: {catalyst}. "
+        f"Current angle: {thesis}."
+    )
+    description = f"{description[: 199 - len(hashtags)].rstrip()} {hashtags}"
+    candidate = {
+        "dialogue": dialogue,
+        "title": title,
+        "description": description,
+    }
+    issues = dialogue_issues(dialogue)
+    issues.extend(experiment_issues(candidate, pick))
+    if issues:
+        raise ValueError("grounded experiment template failed: " + "; ".join(issues))
+    return {**pick, **candidate}
 
 
 def generate_script(pick: dict, *, model: str = "gpt-4.1-mini") -> dict:
@@ -288,6 +439,9 @@ def generate_script(pick: dict, *, model: str = "gpt-4.1-mini") -> dict:
 
     Returns: {"dialogue": [{"character": str, "text": str}, ...], "components": [...], ...pick_fields}
     """
+    if pick.get("format_variant") not in (None, "baseline_dialogue"):
+        return _grounded_experiment_script(pick)
+
     key = _cache_key(pick, model)
     cached = _read_cache(key)
     if cached:
