@@ -71,7 +71,9 @@ class RunnerFailureTest(unittest.TestCase):
                 patch.object(
                     buffer, "schedule_to_youtube_and_instagram", return_value=results
                 ),
-                patch.object(firebase, "set_experiment_assignment_status"),
+                patch.object(
+                    firebase, "set_experiment_assignment_status"
+                ) as set_status,
                 patch.object(firebase, "begin_scheduling", return_value="scheduling"),
                 patch.object(firebase, "record_scheduling_results") as record,
                 patch.object(firebase, "mark_publication_uncertain", return_value=True),
@@ -92,6 +94,10 @@ class RunnerFailureTest(unittest.TestCase):
                     )
 
             record.assert_called_once_with("topic", results)
+            rendered = next(
+                call for call in set_status.call_args_list if call.args[1] == "rendered"
+            )
+            self.assertEqual(rendered.kwargs["duration_seconds"], 1)
 
 
 if __name__ == "__main__":

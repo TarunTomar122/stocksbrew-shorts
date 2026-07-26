@@ -247,6 +247,7 @@ def validate_buffer_results(
 
 def _group_metrics(rows: list[dict[str, Any]]) -> dict[str, float]:
     fields = (
+        "duration_seconds",
         "shown_in_feed",
         "engaged_views",
         "stayed_to_watch_pct",
@@ -315,17 +316,39 @@ def summarize_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "new_formats": new_formats,
             "new_format_passes_retention_gate": False,
         }
-    required = {"stayed_to_watch_pct", "avg_percentage_viewed"}
-    enough_data = required <= baseline.keys() and required <= new_formats.keys()
-    passed = enough_data and (
+    required = {
+        "duration_seconds",
+        "stayed_to_watch_pct",
+        "avg_percentage_viewed",
+    }
+    enough_data = all(
+        all(row.get(field) not in (None, "") for field in required)
+        for row in rows
+    )
+    duration_tolerance = max(5, baseline.get("duration_seconds", 0) * 0.2)
+    duration_comparable = enough_data and all(
+        abs(float(row["duration_seconds"]) - baseline["duration_seconds"])
+        <= duration_tolerance
+        for row in new_rows
+    )
+    passed = enough_data and duration_comparable and (
         new_formats["stayed_to_watch_pct"] >= baseline["stayed_to_watch_pct"] + 5
         and new_formats["avg_percentage_viewed"]
         >= baseline["avg_percentage_viewed"] - 5
     )
     return {
         "variants": summary,
-        "gate": "pass" if passed else "fail" if enough_data else "insufficient_metrics",
+        "gate": (
+            "pass"
+            if passed
+            else "incomparable_duration"
+            if enough_data and not duration_comparable
+            else "fail"
+            if enough_data
+            else "insufficient_metrics"
+        ),
         "baseline": baseline,
         "new_formats": new_formats,
+        "duration_comparable": duration_comparable,
         "new_format_passes_retention_gate": passed,
     }

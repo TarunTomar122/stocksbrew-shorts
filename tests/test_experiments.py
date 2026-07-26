@@ -161,11 +161,18 @@ class AnalyticsReportTest(unittest.TestCase):
                 "views": 600,
             },
         ]
+        for row in rows:
+            row["duration_seconds"] = 23
 
         summary = summarize_metrics(rows)
 
         self.assertTrue(summary["new_format_passes_retention_gate"])
         self.assertEqual(summary["baseline"]["views"], 2000)
+
+        for row in rows:
+            if row["variant"] != "baseline_dialogue":
+                row["duration_seconds"] = 12
+        self.assertEqual(summarize_metrics(rows)["gate"], "incomparable_duration")
 
     def test_gate_waits_for_all_six_videos(self) -> None:
         summary = summarize_metrics(

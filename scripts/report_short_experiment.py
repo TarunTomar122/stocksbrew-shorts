@@ -17,6 +17,7 @@ from lib.experiments import EXPERIMENT_PLAN, summarize_metrics
 
 DEFAULT_INPUT = ROOT / "analytics" / "shorts_experiment_metrics.csv"
 NUMERIC_FIELDS = {
+    "duration_seconds",
     "shown_in_feed",
     "engaged_views",
     "stayed_to_watch_pct",
@@ -33,6 +34,7 @@ PERCENT_FIELDS = {
     "shorts_feed_share_pct",
 }
 COUNT_FIELDS = {"shown_in_feed", "engaged_views", "views", "subscriber_change"}
+POSITIVE_FIELDS = {"duration_seconds"}
 NONNEGATIVE_FIELDS = NUMERIC_FIELDS - {"subscriber_change"}
 REQUIRED_FIELDS = {
     "experiment_id",
@@ -97,6 +99,8 @@ def load_metrics(path: Path) -> list[dict]:
                         raise ValueError(f"Line {line}: {field} must be finite")
                     if field in COUNT_FIELDS and not value.is_integer():
                         raise ValueError(f"Line {line}: {field} must be an integer")
+                    if field in POSITIVE_FIELDS and value <= 0:
+                        raise ValueError(f"Line {line}: {field} must be positive")
                     if field in NONNEGATIVE_FIELDS and value < 0:
                         raise ValueError(f"Line {line}: {field} cannot be negative")
                     if field in PERCENT_FIELDS and value > 100:

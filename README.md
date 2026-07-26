@@ -221,6 +221,9 @@ starts and replays, while engaged views count viewers who stayed past the
 opening seconds. If Studio does not expose a per-video `shown_in_feed` count,
 leave it blank instead of deriving it. See YouTube's
 [current metric definitions](https://support.google.com/youtube/answer/12220281).
+Record the exact video duration too. The report refuses a retention conclusion
+when any new-format duration differs from the control mean by more than 20%
+or five seconds, whichever is larger.
 
 Judge the new formats first on stayed-to-watch and average percentage viewed.
 The gate is at least +5 percentage points stayed-to-watch versus the three

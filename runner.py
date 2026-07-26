@@ -143,7 +143,11 @@ def process_script(script: dict, skip_upload: bool = False) -> Path | None:
     assignment_id = script.get("assignment_id")
     if assignment_id:
         firebase.set_experiment_assignment_status(
-            assignment_id, "rendered", output=str(output), size_mb=size_mb
+            assignment_id,
+            "rendered",
+            output=str(output),
+            size_mb=size_mb,
+            duration_seconds=round(duration, 3),
         )
     _event("rendered", script_id=script_id, assignment_id=assignment_id, output=str(output))
 
