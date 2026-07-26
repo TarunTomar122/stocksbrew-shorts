@@ -584,7 +584,7 @@ def mark_publication_uncertain(topic_key: str, error: str) -> bool:
 
 
 def record_scheduling_results(topic_key: str, results: list[dict[str, Any]]) -> None:
-    """Persist validated Buffer responses before the final state transaction."""
+    """Persist raw Buffer responses before validation/finalization."""
     from firebase_admin import firestore
 
     db = _ensure_app()
@@ -602,7 +602,7 @@ def record_scheduling_results(topic_key: str, results: list[dict[str, Any]]) -> 
             ref,
             {
                 "results": results,
-                "buffer_accepted_at": now,
+                "buffer_responded_at": now,
                 "updated_at": now,
             },
             merge=True,

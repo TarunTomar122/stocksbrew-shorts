@@ -211,8 +211,8 @@ def process_script(script: dict, skip_upload: bool = False) -> Path | None:
                 title=title,
             )
             from lib.experiments import validate_buffer_results
-            validate_buffer_results(results)
             firebase.record_scheduling_results(topic_key, results)
+            validate_buffer_results(results)
             for r in results:
                 status = r.get("status", "?")
                 channel = r.get("channel", "?")
