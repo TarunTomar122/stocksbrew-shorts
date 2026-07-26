@@ -248,6 +248,7 @@ def validate_buffer_results(
 def _group_metrics(rows: list[dict[str, Any]]) -> dict[str, float]:
     fields = (
         "shown_in_feed",
+        "engaged_views",
         "stayed_to_watch_pct",
         "swiped_away_pct",
         "avg_view_duration_seconds",

@@ -18,6 +18,7 @@ from lib.experiments import EXPERIMENT_PLAN, summarize_metrics
 DEFAULT_INPUT = ROOT / "analytics" / "shorts_experiment_metrics.csv"
 NUMERIC_FIELDS = {
     "shown_in_feed",
+    "engaged_views",
     "stayed_to_watch_pct",
     "swiped_away_pct",
     "avg_view_duration_seconds",

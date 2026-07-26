@@ -216,6 +216,12 @@ Studio values at roughly 48 hours after publication into
 python scripts/report_short_experiment.py
 ```
 
+Record both `views` and `engaged_views`: since March 2025, Shorts views include
+starts and replays, while engaged views count viewers who stayed past the
+opening seconds. If Studio does not expose a per-video `shown_in_feed` count,
+leave it blank instead of deriving it. See YouTube's
+[current metric definitions](https://support.google.com/youtube/answer/12220281).
+
 Judge the new formats first on stayed-to-watch and average percentage viewed.
 The gate is at least +5 percentage points stayed-to-watch versus the three
 controls, with average percentage viewed no worse than 5 points below control.
