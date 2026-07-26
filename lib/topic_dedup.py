@@ -58,3 +58,54 @@ def dedupe_items(items: list[dict[str, Any]], blocked_keys: set[str]) -> list[di
         seen.add(key)
         out.append({**item, "topic_key": key})
     return out
+
+
+_ANGLE_STOPWORDS = {
+    "a",
+    "after",
+    "and",
+    "at",
+    "company",
+    "for",
+    "from",
+    "in",
+    "is",
+    "its",
+    "of",
+    "on",
+    "stock",
+    "the",
+    "to",
+}
+
+
+def _angle_terms(item: dict[str, Any]) -> set[str]:
+    text = " ".join(
+        _normalize_text(item.get(field))
+        for field in ("ticker", "headline", "catalyst", "thesis")
+    )
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", text)
+        if len(token) > 1 and token not in _ANGLE_STOPWORDS
+    }
+
+
+def is_near_duplicate(
+    item: dict[str, Any],
+    prior_items: list[dict[str, Any]],
+    threshold: float = 0.35,
+) -> bool:
+    """Match repeated ticker angles while allowing a genuinely new catalyst."""
+    ticker = _normalize_text(item.get("ticker"))
+    terms = _angle_terms(item)
+    if not ticker or not terms:
+        return False
+    for prior in prior_items:
+        if _normalize_text(prior.get("ticker")) != ticker:
+            continue
+        prior_terms = _angle_terms(prior)
+        union = terms | prior_terms
+        if union and len(terms & prior_terms) / len(union) >= threshold:
+            return True
+    return False

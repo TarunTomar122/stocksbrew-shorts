@@ -166,6 +166,60 @@ The pipeline runs 4x daily via GitHub Actions:
 
 Also triggerable manually from the Actions tab.
 
+### Controlled Shorts experiment
+
+The scheduled workflow runs `shorts-discovery-v1`, a fixed six-video sequence:
+
+1. `baseline_dialogue`
+2. `move_mechanism`
+3. `baseline_dialogue`
+4. `catalyst_checkpoint`
+5. `baseline_dialogue`
+6. `radar_invalidation`
+
+Firestore keeps one active assignment and a 48-hour Buffer scheduling gate, so the
+four daily cron checks cannot create a burst. Generated scripts, variants,
+scheduling states, and Buffer results stay attached to the assignment. A
+`scheduled` state means Buffer accepted both channel posts; it is not proof that
+YouTube or Instagram made the video public. An ambiguous or partial Buffer
+submission stops at `needs_reconciliation` and fails the workflow instead of
+retrying.
+
+After checking Buffer and both channel surfaces, resolve that assignment with
+operator evidence:
+
+```bash
+python runner.py --reconcile-assignment ASSIGNMENT_ID \
+  --reconcile-resolution scheduled \
+  --reconcile-evidence "YouTube and Instagram post IDs verified"
+
+# Use retry only after confirming neither channel received the post.
+python runner.py --reconcile-assignment ASSIGNMENT_ID \
+  --reconcile-resolution retry \
+  --reconcile-evidence "No matching post exists in Buffer or either channel"
+```
+
+After the Short is visibly public in YouTube Studio, record that separate fact:
+
+```bash
+python runner.py --confirm-published ASSIGNMENT_ID \
+  --youtube-video-id VIDEO_ID \
+  --publish-evidence "Public visibility verified in YouTube Studio"
+```
+
+YouTube Analytics OAuth is not configured in this project. Export each video's
+Studio values at roughly 48 hours after publication into
+`analytics/shorts_experiment_metrics.csv`, then run:
+
+```bash
+python scripts/report_short_experiment.py
+```
+
+Judge the new formats first on stayed-to-watch and average percentage viewed.
+The gate is at least +5 percentage points stayed-to-watch versus the three
+controls, with average percentage viewed no worse than 5 points below control.
+Views are reported but do not override that retention gate.
+
 ### Setup (one-time)
 
 1. Go to repo **Settings → Secrets and variables → Actions**

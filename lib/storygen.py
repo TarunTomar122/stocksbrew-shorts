@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -113,6 +114,34 @@ def dialogue_issues(dialogue: list[dict]) -> list[str]:
     return issues
 
 
+def experiment_issues(candidate: dict, pick: dict) -> list[str]:
+    variant = pick.get("format_variant")
+    if not variant or variant == "baseline_dialogue":
+        return []
+
+    issues = []
+    dialogue = candidate.get("dialogue") or []
+    first = str(dialogue[0].get("text", "")) if dialogue else ""
+    name = str(pick.get("name") or pick.get("ticker") or "").strip()
+    pct = pick.get("change_pct")
+    if name and name.lower() not in first.lower():
+        issues.append("put the exact company name in the first spoken line")
+    if pct is not None and f"{abs(float(pct)):.1f}%" not in first:
+        issues.append("put the exact percentage move in the first spoken line")
+    if not re.search(r"\b(despite|but|yet|although|while)\b", first, re.I):
+        issues.append("put the contradiction in the first spoken line")
+    if any(
+        len(re.findall(r"[.!?](?:\s|$)", str(line.get("text", "")))) > 1
+        for line in dialogue
+    ):
+        issues.append("use one sentence and one claim per dialogue cut")
+
+    full_output = json.dumps(candidate).lower()
+    if re.search(r"\b(buy|sell|hold)\b", full_output):
+        issues.append("remove investment recommendations")
+    return issues
+
+
 def _client():
     from openai import OpenAI
     key = os.environ.get("OPENAI_API_KEY")
@@ -121,8 +150,22 @@ def _client():
     return OpenAI(api_key=key)
 
 
+def _system_prompt(pick: dict) -> str:
+    if pick.get("format_variant") in (None, "baseline_dialogue"):
+        return SYSTEM_PROMPT
+    return SYSTEM_PROMPT + (
+        "\nEXPERIMENT OVERRIDE: Every turn must be exactly one sentence carrying "
+        "one causal claim. The first sentence must contain the exact company, "
+        "percentage move, and a despite/but/yet contradiction."
+    )
+
+
 def _cache_key(pick: dict, model: str) -> str:
-    raw = json.dumps({"model": model, "prompt": SYSTEM_PROMPT, "pick": pick}, sort_keys=True, default=str)
+    raw = json.dumps(
+        {"model": model, "prompt": _system_prompt(pick), "pick": pick},
+        sort_keys=True,
+        default=str,
+    )
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
@@ -167,6 +210,9 @@ def _format_pick(pick: dict) -> str:
     if pick.get("sector"):
         lines.append(f"Sector: {pick['sector']}")
 
+    if pick.get("format_instructions"):
+        lines.append(f"Required format: {pick['format_instructions']}")
+
     return "\n".join(lines)
 
 
@@ -183,7 +229,7 @@ def generate_script(pick: dict, *, model: str = "gpt-4.1-mini") -> dict:
     client = _client()
     user_msg = _format_pick(pick)
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages = [{"role": "system", "content": _system_prompt(pick)}]
     for shot in FEW_SHOT:
         messages.append({"role": "user", "content": shot["user"]})
         messages.append({"role": "assistant", "content": shot["assistant"]})
@@ -205,6 +251,7 @@ def generate_script(pick: dict, *, model: str = "gpt-4.1-mini") -> dict:
             candidate = {}
 
         issues = dialogue_issues(candidate.get("dialogue") or [])
+        issues.extend(experiment_issues(candidate, pick))
         if not issues:
             parsed = candidate
             break

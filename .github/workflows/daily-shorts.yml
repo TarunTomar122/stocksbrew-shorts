@@ -49,4 +49,4 @@ jobs:
           echo "${FIREBASE_CREDENTIALS_JSON}" > firebase-credentials.json
 
       - name: Generate short
-        run: python runner.py --auto --auto-count 1 --max 1 --auto-skip-existing
+        run: python runner.py --auto --auto-count 1 --max 1 --auto-skip-existing --experiment --experiment-interval-hours 48

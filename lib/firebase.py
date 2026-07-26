@@ -1,8 +1,8 @@
-"""Firestore admin client for reading stocksbrew market data.
+"""Firestore admin client for StocksBrew market data and Shorts state.
 
 Uses the service account JSON configured via FIREBASE_CREDENTIALS_PATH.
-Read-only against the server-only collections (tm_heat_list, tm_latest_prices,
-tm_market_movers, tm_premarket_movers, tm_news_runs).
+Market collections are read-only; Shorts history and experiment collections
+are written transactionally by the publishing pipeline.
 """
 from __future__ import annotations
 
@@ -21,6 +21,9 @@ load_dotenv(ROOT / ".env")
 _firebase_app = None
 _firestore_client = None
 SHORT_TOPIC_HISTORY_COLLECTION = "tm_short_topic_history"
+SHORT_EXPERIMENTS_COLLECTION = "tm_short_experiments"
+SHORT_ASSIGNMENTS_COLLECTION = "tm_short_experiment_assignments"
+SHORT_PUBLICATIONS_COLLECTION = "tm_short_publications"
 
 
 def _ensure_app():
@@ -308,32 +311,38 @@ def get_topic_history(topic_key: str) -> dict[str, Any] | None:
     return _doc_to_dict(doc) if doc.exists else None
 
 
-def is_recent_topic(topic_key: str, *, cooldown_days: int = 7) -> bool:
-    """True when this topic has been posted within the cooldown window."""
-    history = get_topic_history(topic_key)
-    if not history:
-        return False
+def get_recent_topic_history(
+    *, cooldown_days: int = 7, limit: int = 100
+) -> list[dict[str, Any]]:
+    """Return recent durable topics for ticker-angle similarity checks."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=cooldown_days)
+    db = _ensure_app()
+    by_key = {}
+    for field in ("last_scheduled_at", "last_posted_at"):
+        docs = (
+            db.collection(SHORT_TOPIC_HISTORY_COLLECTION)
+            .order_by(field, direction="DESCENDING")
+            .limit(limit)
+            .stream()
+        )
+        for doc in docs:
+            data = _doc_to_dict(doc)
+            event_at = _coerce_datetime(data.get(field))
+            if event_at and event_at >= cutoff:
+                by_key[doc.id] = data
+    return list(by_key.values())[:limit]
 
-    posted_at = _coerce_datetime(history.get("last_posted_at") or history.get("posted_at"))
-    if posted_at is None:
-        return True
-    return posted_at >= datetime.now(timezone.utc) - timedelta(days=cooldown_days)
 
-
-def mark_topic_posted(
+def _scheduled_topic_payload(
     topic_key: str,
-    *,
     market: str,
     pick: dict[str, Any],
     title: str,
     description: str,
-    video_url: str | None = None,
-    service: str | None = None,
-) -> None:
-    """Persist the fact that a topic was posted so future runs can skip it."""
-    db = _ensure_app()
-    now = datetime.now(timezone.utc)
-    payload: dict[str, Any] = {
+    video_url: str,
+    now: datetime,
+) -> dict[str, Any]:
+    return {
         "topic_key": topic_key,
         "market": market.upper(),
         "ticker": pick.get("ticker"),
@@ -345,8 +354,506 @@ def mark_topic_posted(
         "title": title,
         "description": description,
         "video_url": video_url,
-        "service": service,
-        "last_posted_at": now,
+        "service": "buffer",
+        "last_scheduled_at": now,
         "updated_at": now,
     }
-    db.collection(SHORT_TOPIC_HISTORY_COLLECTION).document(topic_key).set(payload, merge=True)
+
+
+def get_active_experiment_assignment(experiment_id: str) -> dict[str, Any] | None:
+    db = _ensure_app()
+    state = db.collection(SHORT_EXPERIMENTS_COLLECTION).document(experiment_id).get()
+    if not state.exists:
+        return None
+    active_id = (_doc_to_dict(state)).get("active_assignment_id")
+    if not active_id:
+        return None
+    assignment = db.collection(SHORT_ASSIGNMENTS_COLLECTION).document(active_id).get()
+    if not assignment.exists:
+        raise RuntimeError(f"Experiment {experiment_id} points to missing assignment {active_id}")
+    return _doc_to_dict(assignment)
+
+
+def get_experiment_state(experiment_id: str) -> dict[str, Any]:
+    doc = (
+        _ensure_app()
+        .collection(SHORT_EXPERIMENTS_COLLECTION)
+        .document(experiment_id)
+        .get()
+    )
+    return _doc_to_dict(doc) if doc.exists else {}
+
+
+def get_experiment_assignment(assignment_id: str) -> dict[str, Any] | None:
+    doc = (
+        _ensure_app()
+        .collection(SHORT_ASSIGNMENTS_COLLECTION)
+        .document(assignment_id)
+        .get()
+    )
+    return _doc_to_dict(doc) if doc.exists else None
+
+
+def reserve_experiment_assignment(
+    experiment_id: str,
+    plan: tuple[str, ...],
+    topic_key: str,
+    pick: dict[str, Any],
+    *,
+    min_interval_hours: int,
+) -> dict[str, Any]:
+    """Atomically reserve one durable experiment slot or return its current gate."""
+    from firebase_admin import firestore
+    from lib.experiments import assignment_id
+
+    if min_interval_hours < 48:
+        raise ValueError("Experiment publish interval cannot be less than 48 hours")
+    db = _ensure_app()
+    state_ref = db.collection(SHORT_EXPERIMENTS_COLLECTION).document(experiment_id)
+    transaction = db.transaction()
+
+    @firestore.transactional
+    def reserve(txn):
+        state_snap = state_ref.get(transaction=txn)
+        state = _doc_to_dict(state_snap) if state_snap.exists else {}
+        stored_plan = tuple(state.get("plan") or ())
+        if stored_plan and stored_plan != plan:
+            raise RuntimeError(f"Experiment {experiment_id} plan changed after it started")
+        active_id = state.get("active_assignment_id")
+        if active_id:
+            active_ref = db.collection(SHORT_ASSIGNMENTS_COLLECTION).document(active_id)
+            active_snap = active_ref.get(transaction=txn)
+            if not active_snap.exists:
+                raise RuntimeError(
+                    f"Experiment {experiment_id} points to missing assignment {active_id}"
+                )
+            return {"outcome": "active", **_doc_to_dict(active_snap)}
+
+        slot = int(state.get("next_slot", 0))
+        if slot >= len(plan):
+            return {"outcome": "complete", "next_slot": slot}
+
+        last_scheduled = _coerce_datetime(
+            state.get("last_scheduled_at") or state.get("last_published_at")
+        )
+        now = datetime.now(timezone.utc)
+        if last_scheduled:
+            next_at = last_scheduled + timedelta(hours=min_interval_hours)
+            if next_at > now:
+                return {"outcome": "waiting", "next_at": next_at}
+
+        aid = assignment_id(experiment_id, slot, topic_key)
+        assignment_ref = db.collection(SHORT_ASSIGNMENTS_COLLECTION).document(aid)
+        assignment_snap = assignment_ref.get(transaction=txn)
+        if assignment_snap.exists:
+            assignment = _doc_to_dict(assignment_snap)
+        else:
+            assignment = {
+                "assignment_id": aid,
+                "experiment_id": experiment_id,
+                "slot": slot,
+                "variant": plan[slot],
+                "topic_key": topic_key,
+                "pick": pick,
+                "status": "assigned",
+                "created_at": now,
+                "updated_at": now,
+            }
+            txn.set(assignment_ref, assignment)
+        txn.set(
+            state_ref,
+            {
+                "experiment_id": experiment_id,
+                "plan": list(plan),
+                "next_slot": slot,
+                "active_assignment_id": aid,
+                "updated_at": now,
+            },
+            merge=True,
+        )
+        return {"outcome": "assigned", **assignment}
+
+    return reserve(transaction)
+
+
+def save_experiment_script(assignment_id: str, script: dict[str, Any]) -> None:
+    set_experiment_assignment_status(assignment_id, "generated", script=script)
+
+
+_ASSIGNMENT_TRANSITIONS = {
+    "assigned": {"generated", "failed"},
+    "generated": {"rendered", "failed"},
+    "rendered": {"uploaded", "failed"},
+    "uploaded": {"scheduling", "needs_reconciliation", "failed"},
+    "failed": {"generated", "rendered"},
+    "scheduling": {"needs_reconciliation", "scheduled"},
+    "needs_reconciliation": set(),
+    "scheduled": {"published"},
+    "published": set(),
+}
+
+
+def set_experiment_assignment_status(
+    assignment_id: str,
+    status: str,
+    **details: Any,
+) -> None:
+    from firebase_admin import firestore
+
+    db = _ensure_app()
+    ref = db.collection(SHORT_ASSIGNMENTS_COLLECTION).document(assignment_id)
+    transaction = db.transaction()
+
+    @firestore.transactional
+    def transition(txn):
+        snap = ref.get(transaction=txn)
+        if not snap.exists:
+            raise RuntimeError(f"Missing experiment assignment {assignment_id}")
+        current = (_doc_to_dict(snap)).get("status")
+        if current != status and status not in _ASSIGNMENT_TRANSITIONS.get(current, set()):
+            raise RuntimeError(f"Invalid assignment transition {current} -> {status}")
+        txn.set(
+            ref,
+            {"status": status, "updated_at": datetime.now(timezone.utc), **details},
+            merge=True,
+        )
+
+    transition(transaction)
+
+
+def begin_scheduling(topic_key: str, assignment_id: str) -> str:
+    """Enter the irreversible Buffer step once; ambiguous retries are blocked."""
+    from firebase_admin import firestore
+
+    db = _ensure_app()
+    ref = db.collection(SHORT_PUBLICATIONS_COLLECTION).document(topic_key)
+    transaction = db.transaction()
+
+    @firestore.transactional
+    def begin(txn):
+        snap = ref.get(transaction=txn)
+        current = _doc_to_dict(snap) if snap.exists else {}
+        status = current.get("status")
+        if status in {"scheduled", "published"}:
+            return "scheduled"
+        if status in {"scheduling", "publishing", "needs_reconciliation"}:
+            raise RuntimeError(
+                f"Publication {topic_key} is {status}; reconcile Buffer before retrying"
+            )
+        txn.set(
+            ref,
+            {
+                "topic_key": topic_key,
+                "assignment_id": assignment_id,
+                "status": "scheduling",
+                "results": [],
+                "updated_at": datetime.now(timezone.utc),
+            },
+            merge=True,
+        )
+        return "scheduling"
+
+    return begin(transaction)
+
+
+def mark_publication_uncertain(topic_key: str, error: str) -> bool:
+    from firebase_admin import firestore
+
+    db = _ensure_app()
+    ref = db.collection(SHORT_PUBLICATIONS_COLLECTION).document(topic_key)
+    transaction = db.transaction()
+
+    @firestore.transactional
+    def mark(txn):
+        snap = ref.get(transaction=txn)
+        current = _doc_to_dict(snap) if snap.exists else {}
+        if current.get("status") in {"scheduled", "published"}:
+            return False
+        txn.set(
+            ref,
+            {
+                "status": "needs_reconciliation",
+                "error": error,
+                "updated_at": datetime.now(timezone.utc),
+            },
+            merge=True,
+        )
+        return True
+
+    return mark(transaction)
+
+
+def record_scheduling_results(topic_key: str, results: list[dict[str, Any]]) -> None:
+    """Persist validated Buffer responses before the final state transaction."""
+    from firebase_admin import firestore
+
+    db = _ensure_app()
+    ref = db.collection(SHORT_PUBLICATIONS_COLLECTION).document(topic_key)
+    transaction = db.transaction()
+
+    @firestore.transactional
+    def record(txn):
+        snap = ref.get(transaction=txn)
+        current = _doc_to_dict(snap) if snap.exists else {}
+        if current.get("status") != "scheduling":
+            raise RuntimeError(f"Publication {topic_key} was not armed")
+        now = datetime.now(timezone.utc)
+        txn.set(
+            ref,
+            {
+                "results": results,
+                "buffer_accepted_at": now,
+                "updated_at": now,
+            },
+            merge=True,
+        )
+
+    record(transaction)
+
+
+def complete_scheduling(
+    *,
+    topic_key: str,
+    market: str,
+    pick: dict[str, Any],
+    title: str,
+    description: str,
+    video_url: str,
+    results: list[dict[str, Any]] | None,
+    experiment_id: str | None = None,
+    assignment_id: str | None = None,
+    expected_status: str = "scheduling",
+    reconciliation_evidence: str | None = None,
+) -> None:
+    """Atomically record Buffer acceptance and advance an experiment when present."""
+    from firebase_admin import firestore
+
+    db = _ensure_app()
+    publication_ref = db.collection(SHORT_PUBLICATIONS_COLLECTION).document(topic_key)
+    topic_ref = db.collection(SHORT_TOPIC_HISTORY_COLLECTION).document(topic_key)
+    state_ref = (
+        db.collection(SHORT_EXPERIMENTS_COLLECTION).document(experiment_id)
+        if experiment_id
+        else None
+    )
+    assignment_ref = (
+        db.collection(SHORT_ASSIGNMENTS_COLLECTION).document(assignment_id)
+        if assignment_id
+        else None
+    )
+    transaction = db.transaction()
+
+    @firestore.transactional
+    def finish(txn):
+        publication_snap = publication_ref.get(transaction=txn)
+        publication = _doc_to_dict(publication_snap) if publication_snap.exists else {}
+        if publication.get("status") in {"scheduled", "published"}:
+            return
+        if publication.get("status") != expected_status:
+            raise RuntimeError(f"Publication {topic_key} was not armed")
+        final_results = results if results is not None else publication.get("results") or []
+
+        state = assignment = None
+        if state_ref and assignment_ref:
+            state_snap = state_ref.get(transaction=txn)
+            assignment_snap = assignment_ref.get(transaction=txn)
+            if not assignment_snap.exists:
+                raise RuntimeError(f"Missing experiment assignment {assignment_id}")
+            state = _doc_to_dict(state_snap) if state_snap.exists else {}
+            assignment = _doc_to_dict(assignment_snap)
+            if assignment.get("experiment_id") != experiment_id:
+                raise RuntimeError(
+                    f"Assignment {assignment_id} belongs to another experiment"
+                )
+            if assignment.get("topic_key") != topic_key:
+                raise RuntimeError(f"Assignment {assignment_id} topic changed")
+            if state.get("active_assignment_id") != assignment_id:
+                raise RuntimeError(f"Assignment {assignment_id} is not active")
+            if assignment.get("status") != expected_status:
+                raise RuntimeError(f"Assignment {assignment_id} was not armed")
+
+        now = datetime.now(timezone.utc)
+        txn.set(
+            publication_ref,
+            {
+                "status": "scheduled",
+                "video_url": video_url,
+                "results": final_results,
+                "scheduled_at": now,
+                "updated_at": now,
+                "reconciliation_evidence": reconciliation_evidence,
+            },
+            merge=True,
+        )
+        txn.set(
+            topic_ref,
+            _scheduled_topic_payload(
+                topic_key, market, pick, title, description, video_url, now
+            ),
+            merge=True,
+        )
+        if state_ref and assignment_ref and state is not None and assignment is not None:
+            txn.set(
+                assignment_ref,
+                {
+                    "status": "scheduled",
+                    "video_url": video_url,
+                    "results": final_results,
+                    "scheduled_at": now,
+                    "updated_at": now,
+                    "reconciliation_evidence": reconciliation_evidence,
+                },
+                merge=True,
+            )
+            txn.set(
+                state_ref,
+                {
+                    "active_assignment_id": None,
+                    "next_slot": int(assignment.get("slot", 0)) + 1,
+                    "scheduled_count": int(state.get("scheduled_count", 0)) + 1,
+                    "last_scheduled_at": now,
+                    "updated_at": now,
+                },
+                merge=True,
+            )
+
+    finish(transaction)
+
+
+def reconcile_experiment_scheduling(
+    assignment_id: str,
+    resolution: str,
+    evidence: str,
+) -> None:
+    """Resolve a terminal ambiguous Buffer submission with operator evidence."""
+    if resolution not in {"scheduled", "retry"} or not evidence.strip():
+        raise ValueError("Resolution and evidence are required")
+
+    db = _ensure_app()
+    assignment = get_experiment_assignment(assignment_id)
+    if not assignment:
+        raise RuntimeError(f"Missing experiment assignment {assignment_id}")
+    experiment_id = assignment["experiment_id"]
+    topic_key = assignment["topic_key"]
+    script = assignment.get("script") or {}
+
+    if resolution == "scheduled":
+        video_url = assignment.get("video_url")
+        if not video_url:
+            raise RuntimeError("Cannot confirm scheduling without an uploaded video URL")
+        complete_scheduling(
+            experiment_id=experiment_id,
+            assignment_id=assignment_id,
+            topic_key=topic_key,
+            market=script.get("market", "US"),
+            pick=script or assignment.get("pick") or {},
+            title=script.get("title", ""),
+            description=script.get("description", ""),
+            video_url=video_url,
+            results=None,
+            expected_status="needs_reconciliation",
+            reconciliation_evidence=evidence,
+        )
+        return
+
+    from firebase_admin import firestore
+
+    state_ref = db.collection(SHORT_EXPERIMENTS_COLLECTION).document(experiment_id)
+    assignment_ref = db.collection(SHORT_ASSIGNMENTS_COLLECTION).document(assignment_id)
+    publication_ref = db.collection(SHORT_PUBLICATIONS_COLLECTION).document(topic_key)
+    transaction = db.transaction()
+
+    @firestore.transactional
+    def reset(txn):
+        state_snap = state_ref.get(transaction=txn)
+        assignment_snap = assignment_ref.get(transaction=txn)
+        publication_snap = publication_ref.get(transaction=txn)
+        state = _doc_to_dict(state_snap) if state_snap.exists else {}
+        current_assignment = (
+            _doc_to_dict(assignment_snap) if assignment_snap.exists else {}
+        )
+        publication = _doc_to_dict(publication_snap) if publication_snap.exists else {}
+        if state.get("active_assignment_id") != assignment_id:
+            raise RuntimeError(f"Assignment {assignment_id} is not active")
+        if current_assignment.get("status") != "needs_reconciliation":
+            raise RuntimeError(f"Assignment {assignment_id} is not reconcilable")
+        if publication.get("status") != "needs_reconciliation":
+            raise RuntimeError(f"Publication {topic_key} is not reconcilable")
+        now = datetime.now(timezone.utc)
+        audit = {"resolution": "retry", "evidence": evidence, "resolved_at": now}
+        txn.set(
+            assignment_ref,
+            {"status": "rendered", "last_reconciliation": audit, "updated_at": now},
+            merge=True,
+        )
+        txn.set(
+            publication_ref,
+            {
+                "status": "retryable",
+                "error": None,
+                "last_reconciliation": audit,
+                "updated_at": now,
+            },
+            merge=True,
+        )
+
+    reset(transaction)
+
+
+def confirm_experiment_published(
+    assignment_id: str,
+    youtube_video_id: str,
+    evidence: str,
+) -> None:
+    """Promote Buffer-scheduled state only after live YouTube verification."""
+    if not youtube_video_id.strip() or not evidence.strip():
+        raise ValueError("YouTube video ID and evidence are required")
+    from firebase_admin import firestore
+
+    db = _ensure_app()
+    assignment_ref = db.collection(SHORT_ASSIGNMENTS_COLLECTION).document(assignment_id)
+    assignment = get_experiment_assignment(assignment_id)
+    if not assignment:
+        raise RuntimeError(f"Missing experiment assignment {assignment_id}")
+    topic_key = assignment["topic_key"]
+    publication_ref = db.collection(SHORT_PUBLICATIONS_COLLECTION).document(topic_key)
+    topic_ref = db.collection(SHORT_TOPIC_HISTORY_COLLECTION).document(topic_key)
+    transaction = db.transaction()
+
+    @firestore.transactional
+    def confirm(txn):
+        assignment_snap = assignment_ref.get(transaction=txn)
+        publication_snap = publication_ref.get(transaction=txn)
+        current_assignment = (
+            _doc_to_dict(assignment_snap) if assignment_snap.exists else {}
+        )
+        publication = _doc_to_dict(publication_snap) if publication_snap.exists else {}
+        if current_assignment.get("status") == "published":
+            return
+        if current_assignment.get("status") != "scheduled":
+            raise RuntimeError(f"Assignment {assignment_id} is not scheduled")
+        if current_assignment.get("topic_key") != topic_key:
+            raise RuntimeError(f"Assignment {assignment_id} topic changed")
+        if publication.get("status") != "scheduled":
+            raise RuntimeError(f"Publication {topic_key} is not scheduled")
+        now = datetime.now(timezone.utc)
+        proof = {
+            "status": "published",
+            "youtube_video_id": youtube_video_id,
+            "publish_evidence": evidence,
+            "published_at": now,
+            "updated_at": now,
+        }
+        txn.set(assignment_ref, proof, merge=True)
+        txn.set(publication_ref, proof, merge=True)
+        txn.set(
+            topic_ref,
+            {
+                "youtube_video_id": youtube_video_id,
+                "last_published_at": now,
+                "updated_at": now,
+            },
+            merge=True,
+        )
+
+    confirm(transaction)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from lib.topic_dedup import dedupe_items, topic_fingerprint
+from lib.topic_dedup import dedupe_items, is_near_duplicate, topic_fingerprint
 
 
 class TopicDedupTest(unittest.TestCase):
@@ -44,6 +44,20 @@ class TopicDedupTest(unittest.TestCase):
 
         self.assertEqual(len(fresh), 1)
         self.assertIn("topic_key", fresh[0])
+
+    def test_near_duplicate_ticker_angles_are_blocked(self) -> None:
+        candidate = {
+            "ticker": "OUST",
+            "headline": "Ouster drops after hitting a 52 week high",
+            "catalyst": "Momentum reversal",
+        }
+        history = [{
+            "ticker": "OUST",
+            "headline": "Ouster dipped from its 52-week high",
+            "catalyst": "Momentum reversed",
+        }]
+
+        self.assertTrue(is_near_duplicate(candidate, history))
 
 
 if __name__ == "__main__":

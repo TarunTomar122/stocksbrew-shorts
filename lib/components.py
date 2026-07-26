@@ -96,17 +96,18 @@ def render_big_move(data: dict) -> Path:
     """Huge % change card. Green if up, red if down. No arrow."""
     pct = float(data.get("pct", 0))
     name = data.get("name", "")
+    contradiction = data.get("contradiction", "")
     is_up = pct >= 0
     color = GREEN if is_up else RED
     sign = "+" if is_up else ""
 
-    h = 280
+    h = 360 if contradiction else 280
     card = _rounded_card(CARD_W, h, bg=BG_DARK, radius=36, border=color)
     draw = ImageDraw.Draw(card)
     pad = 20
 
     cx = CARD_W // 2 + pad
-    cy = h // 2 + pad
+    cy = 155 + pad if contradiction else h // 2 + pad
 
     pct_font = _font(160, bold=True)
     pct_text = f"{sign}{pct:.1f}%"
@@ -115,6 +116,17 @@ def render_big_move(data: dict) -> Path:
     if name:
         name_font = _font(40, bold=True)
         draw.text((cx, 50 + pad), name, font=name_font, fill=WHITE, anchor="mm")
+
+    if contradiction:
+        detail_font = _font(30, bold=True)
+        for i, line in enumerate(_wrap_text(contradiction, detail_font, CARD_W - 120)[:2]):
+            draw.text(
+                (cx, 280 + pad + i * 38),
+                line,
+                font=detail_font,
+                fill=WHITE,
+                anchor="mm",
+            )
 
     out = _temp_path("comp_bigmov")
     card.save(out)

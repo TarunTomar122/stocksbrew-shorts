@@ -2,10 +2,33 @@ from __future__ import annotations
 
 import unittest
 
-from lib.storygen import dialogue_issues
+from lib.storygen import dialogue_issues, experiment_issues
 
 
 class DialogueQualityTest(unittest.TestCase):
+    def test_experiment_requires_exact_first_line_and_no_advice(self) -> None:
+        pick = {
+            "name": "Tesla",
+            "change_pct": -14.5,
+            "format_variant": "move_mechanism",
+        }
+        rejected = {
+            "dialogue": [{"character": "rae2", "text": "This stock collapsed."}],
+            "title": "Buy the dip",
+        }
+        accepted = {
+            "dialogue": [
+                {
+                    "character": "rae2",
+                    "text": "Tesla fell 14.5%, yet capex is still accelerating.",
+                }
+            ],
+            "title": "Tesla's 14.5% Capex Contradiction",
+        }
+
+        self.assertTrue(experiment_issues(rejected, pick))
+        self.assertEqual(experiment_issues(accepted, pick), [])
+
     def test_rejects_formulaic_dialogue(self) -> None:
         dialogue = [
             {"character": "rae2", "text": "Did Nvidia drop a secret sauce?"},
