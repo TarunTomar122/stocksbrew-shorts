@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,12 @@ NUMERIC_FIELDS = {
     "views",
     "subscriber_change",
 }
+PERCENT_FIELDS = {
+    "stayed_to_watch_pct",
+    "swiped_away_pct",
+    "shorts_feed_share_pct",
+}
+NONNEGATIVE_FIELDS = NUMERIC_FIELDS - {"subscriber_change"}
 REQUIRED_FIELDS = {
     "experiment_id",
     "assignment_id",
@@ -71,6 +78,8 @@ def load_metrics(path: Path) -> list[dict]:
                 measured = datetime.fromisoformat(row["measured_at"])
             except (TypeError, ValueError):
                 raise ValueError(f"Line {line}: published_at/measured_at must be ISO timestamps")
+            if published.utcoffset() is None or measured.utcoffset() is None:
+                raise ValueError(f"Line {line}: timestamps must include a timezone")
             try:
                 age_hours = (measured - published).total_seconds() / 3600
             except TypeError:
@@ -81,7 +90,22 @@ def load_metrics(path: Path) -> list[dict]:
                 raise ValueError(f"Line {line}: measure each video at roughly 48 hours")
             for field in NUMERIC_FIELDS:
                 if row.get(field) not in (None, ""):
-                    row[field] = float(row[field])
+                    value = float(row[field])
+                    if not math.isfinite(value):
+                        raise ValueError(f"Line {line}: {field} must be finite")
+                    if field in NONNEGATIVE_FIELDS and value < 0:
+                        raise ValueError(f"Line {line}: {field} cannot be negative")
+                    if field in PERCENT_FIELDS and value > 100:
+                        raise ValueError(f"Line {line}: {field} must be 0-100")
+                    row[field] = value
+            stayed = row.get("stayed_to_watch_pct")
+            swiped = row.get("swiped_away_pct")
+            if stayed not in (None, "") and swiped not in (None, ""):
+                if not 99 <= stayed + swiped <= 101:
+                    raise ValueError(
+                        f"Line {line}: stayed_to_watch_pct and swiped_away_pct "
+                        "must total about 100"
+                    )
             rows.append(row)
         return rows
 
