@@ -48,6 +48,19 @@ class ExperimentPlanTest(unittest.TestCase):
             self.assertIn("Margins collapsed", components[0]["data"]["contradiction"])
             self.assertLessEqual(format_settings(variant)["speaker_scale"], 0.32)
 
+        self.assertEqual(
+            build_components(pick, "move_mechanism")[1]["type"],
+            "mechanism_card",
+        )
+        self.assertEqual(
+            build_components(pick, "catalyst_checkpoint")[-1]["type"],
+            "checkpoint_card",
+        )
+        self.assertEqual(
+            build_components(pick, "radar_invalidation")[-1]["type"],
+            "invalidation_card",
+        )
+
 
 class StorySelectionTest(unittest.TestCase):
     def test_specific_hard_move_beats_vague_mover(self) -> None:

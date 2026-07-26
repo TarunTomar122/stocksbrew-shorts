@@ -255,12 +255,95 @@ def render_reddit_buzz(data: dict) -> Path:
     return out
 
 
+def _render_signal_card(
+    data: dict,
+    *,
+    label: str,
+    marker: str,
+    color: tuple[int, int, int, int],
+    prefix: str,
+) -> Path:
+    """One-claim card with a format-specific visual marker."""
+    text = str(data.get("text") or "")
+    text_font = _font(48, bold=True)
+    lines = _wrap_text(text, text_font, 600)[:3]
+    h = max(280, 120 + len(lines) * 62)
+    card = _rounded_card(CARD_W, h, bg=BG_DARK, radius=36, border=color)
+    draw = ImageDraw.Draw(card)
+    pad = 20
+
+    draw.rounded_rectangle(
+        (pad + 35, pad + 45, pad + 210, pad + h - 45),
+        radius=24,
+        fill=(color[0], color[1], color[2], 55),
+        outline=color,
+        width=4,
+    )
+    draw.text(
+        (pad + 122, pad + h // 2),
+        marker,
+        font=_font(42 if len(marker) > 2 else 64, bold=True),
+        fill=WHITE,
+        anchor="mm",
+    )
+    draw.text(
+        (pad + 260, pad + 58),
+        label,
+        font=_font(30, bold=True),
+        fill=color,
+    )
+    for index, line in enumerate(lines):
+        draw.text(
+            (pad + 260, pad + 115 + index * 62),
+            line,
+            font=text_font,
+            fill=WHITE,
+        )
+
+    out = _temp_path(prefix)
+    card.save(out)
+    return out
+
+
+def render_mechanism_card(data: dict) -> Path:
+    return _render_signal_card(
+        data,
+        label="WHY IT MOVED",
+        marker=">>",
+        color=ACCENT_BLUE,
+        prefix="comp_mechanism",
+    )
+
+
+def render_checkpoint_card(data: dict) -> Path:
+    return _render_signal_card(
+        data,
+        label="NEXT CHECK",
+        marker="NEXT",
+        color=GOLD,
+        prefix="comp_checkpoint",
+    )
+
+
+def render_invalidation_card(data: dict) -> Path:
+    return _render_signal_card(
+        data,
+        label="BREAKS IF",
+        marker="X",
+        color=RED,
+        prefix="comp_invalidation",
+    )
+
+
 RENDERERS = {
     "big_move": render_big_move,
     "company_card": render_company_card,
     "context_quote": render_context_quote,
     "verdict_stamp": render_verdict_stamp,
     "reddit_buzz": render_reddit_buzz,
+    "mechanism_card": render_mechanism_card,
+    "checkpoint_card": render_checkpoint_card,
+    "invalidation_card": render_invalidation_card,
 }
 
 

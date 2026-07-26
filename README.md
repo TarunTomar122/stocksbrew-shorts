@@ -177,6 +177,10 @@ The scheduled workflow runs `shorts-discovery-v1`, a fixed six-video sequence:
 5. `baseline_dialogue`
 6. `radar_invalidation`
 
+The three new formats share the exact move in frame one, then use distinct
+mechanism, checkpoint, or invalidation proof cards instead of repeating one
+generic quote-card treatment.
+
 Firestore keeps one active assignment and a 48-hour Buffer scheduling gate, so the
 four daily cron checks cannot create a burst. Generated scripts, variants,
 scheduling states, and Buffer results stay attached to the assignment. A

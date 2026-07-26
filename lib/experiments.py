@@ -144,9 +144,9 @@ def build_components(pick: dict[str, Any], variant: str) -> list[dict[str, Any]]
         return [
             first,
             {
-                "type": "context_quote",
+                "type": "mechanism_card",
                 "show_at": 0.20,
-                "data": {"source": "MECHANISM", "text": _short_text(catalyst)},
+                "data": {"text": _short_text(catalyst)},
             },
             {
                 "type": "context_quote",
@@ -158,19 +158,14 @@ def build_components(pick: dict[str, Any], variant: str) -> list[dict[str, Any]]
         return [
             first,
             {
-                "type": "company_card",
-                "show_at": 0.20,
-                "data": {"name": company, "sector": _short_text(pick.get("sector"), 28)},
-            },
-            {
                 "type": "context_quote",
-                "show_at": 0.42,
+                "show_at": 0.24,
                 "data": {"source": "CATALYST", "text": _short_text(catalyst)},
             },
             {
-                "type": "context_quote",
-                "show_at": 0.66,
-                "data": {"source": "NEXT CHECKPOINT", "text": _short_text(checkpoint)},
+                "type": "checkpoint_card",
+                "show_at": 0.58,
+                "data": {"text": _short_text(checkpoint)},
             },
         ]
     return [
@@ -181,12 +176,9 @@ def build_components(pick: dict[str, Any], variant: str) -> list[dict[str, Any]]
             "data": {"source": "MARKET BELIEF", "text": _short_text(thesis)},
         },
         {
-            "type": "context_quote",
-            "show_at": 0.48,
-            "data": {
-                "source": "INVALIDATED IF",
-                "text": _short_text(pick.get("invalidation") or catalyst),
-            },
+            "type": "invalidation_card",
+            "show_at": 0.55,
+            "data": {"text": _short_text(pick.get("invalidation") or catalyst)},
         },
     ]
 
