@@ -17,11 +17,12 @@ class AnalyticsImportTest(unittest.TestCase):
         )
         valid = (
             "shorts-discovery-v1,a0,0,baseline_dialogue,v0,"
-            "2026-07-26T03:00:00+00:00,100,30,30,70,12,80,90,50,1,"
+            "2026-07-26T03:00:00+00:00,,30,30,70,12,80,90,50,1,"
             "2026-07-28T03:00:00+00:00\n"
         )
         invalid_rows = {
-            "non-finite": valid.replace(",100,30,30,", ",nan,30,30,"),
+            "non-finite": valid.replace(",,30,30,", ",nan,30,30,"),
+            "fractional-count": valid.replace(",,30,30,", ",,30.5,30,"),
             "percentage": valid.replace(",30,70,", ",101,70,"),
             "timezone": valid.replace("+00:00", "", 1),
         }

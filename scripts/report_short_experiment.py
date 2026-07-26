@@ -32,6 +32,7 @@ PERCENT_FIELDS = {
     "swiped_away_pct",
     "shorts_feed_share_pct",
 }
+COUNT_FIELDS = {"shown_in_feed", "engaged_views", "views", "subscriber_change"}
 NONNEGATIVE_FIELDS = NUMERIC_FIELDS - {"subscriber_change"}
 REQUIRED_FIELDS = {
     "experiment_id",
@@ -94,6 +95,8 @@ def load_metrics(path: Path) -> list[dict]:
                     value = float(row[field])
                     if not math.isfinite(value):
                         raise ValueError(f"Line {line}: {field} must be finite")
+                    if field in COUNT_FIELDS and not value.is_integer():
+                        raise ValueError(f"Line {line}: {field} must be an integer")
                     if field in NONNEGATIVE_FIELDS and value < 0:
                         raise ValueError(f"Line {line}: {field} cannot be negative")
                     if field in PERCENT_FIELDS and value > 100:
