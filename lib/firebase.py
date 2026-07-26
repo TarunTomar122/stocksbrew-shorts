@@ -404,7 +404,7 @@ def reserve_experiment_assignment(
 ) -> dict[str, Any]:
     """Atomically reserve one durable experiment slot or return its current gate."""
     from firebase_admin import firestore
-    from lib.experiments import assignment_id
+    from lib.experiments import assignment_id, previous_publication_verified
 
     if min_interval_hours < 48:
         raise ValueError("Experiment publish interval cannot be less than 48 hours")
@@ -432,6 +432,12 @@ def reserve_experiment_assignment(
         slot = int(state.get("next_slot", 0))
         if slot >= len(plan):
             return {"outcome": "complete", "next_slot": slot}
+        if not previous_publication_verified(state, slot):
+            return {
+                "outcome": "awaiting_publication",
+                "previous_slot": slot - 1,
+                "assignment_id": state.get("last_scheduled_assignment_id"),
+            }
 
         last_scheduled = _coerce_datetime(
             state.get("last_scheduled_at") or state.get("last_published_at")
@@ -712,6 +718,8 @@ def complete_scheduling(
                     "next_slot": int(assignment.get("slot", 0)) + 1,
                     "scheduled_count": int(state.get("scheduled_count", 0)) + 1,
                     "last_scheduled_at": now,
+                    "last_scheduled_slot": int(assignment.get("slot", 0)),
+                    "last_scheduled_assignment_id": assignment_id,
                     "updated_at": now,
                 },
                 merge=True,
@@ -816,44 +824,67 @@ def confirm_experiment_published(
     if not assignment:
         raise RuntimeError(f"Missing experiment assignment {assignment_id}")
     topic_key = assignment["topic_key"]
+    experiment_id = assignment["experiment_id"]
+    slot = int(assignment["slot"])
     publication_ref = db.collection(SHORT_PUBLICATIONS_COLLECTION).document(topic_key)
     topic_ref = db.collection(SHORT_TOPIC_HISTORY_COLLECTION).document(topic_key)
+    state_ref = db.collection(SHORT_EXPERIMENTS_COLLECTION).document(experiment_id)
     transaction = db.transaction()
 
     @firestore.transactional
     def confirm(txn):
         assignment_snap = assignment_ref.get(transaction=txn)
         publication_snap = publication_ref.get(transaction=txn)
+        state_snap = state_ref.get(transaction=txn)
         current_assignment = (
             _doc_to_dict(assignment_snap) if assignment_snap.exists else {}
         )
         publication = _doc_to_dict(publication_snap) if publication_snap.exists else {}
-        if current_assignment.get("status") == "published":
-            return
-        if current_assignment.get("status") != "scheduled":
-            raise RuntimeError(f"Assignment {assignment_id} is not scheduled")
-        if current_assignment.get("topic_key") != topic_key:
-            raise RuntimeError(f"Assignment {assignment_id} topic changed")
-        if publication.get("status") != "scheduled":
-            raise RuntimeError(f"Publication {topic_key} is not scheduled")
+        state = _doc_to_dict(state_snap) if state_snap.exists else {}
+        already_published = current_assignment.get("status") == "published"
+        if already_published:
+            if (
+                current_assignment.get("youtube_video_id") != youtube_video_id
+                or publication.get("status") != "published"
+                or publication.get("youtube_video_id") != youtube_video_id
+            ):
+                raise RuntimeError(f"Assignment {assignment_id} YouTube video changed")
+        else:
+            if current_assignment.get("status") != "scheduled":
+                raise RuntimeError(f"Assignment {assignment_id} is not scheduled")
+            if current_assignment.get("topic_key") != topic_key:
+                raise RuntimeError(f"Assignment {assignment_id} topic changed")
+            if publication.get("status") != "scheduled":
+                raise RuntimeError(f"Publication {topic_key} is not scheduled")
         now = datetime.now(timezone.utc)
-        proof = {
-            "status": "published",
-            "youtube_video_id": youtube_video_id,
-            "publish_evidence": evidence,
-            "published_at": now,
-            "updated_at": now,
-        }
-        txn.set(assignment_ref, proof, merge=True)
-        txn.set(publication_ref, proof, merge=True)
-        txn.set(
-            topic_ref,
-            {
+        if not already_published:
+            proof = {
+                "status": "published",
                 "youtube_video_id": youtube_video_id,
-                "last_published_at": now,
+                "publish_evidence": evidence,
+                "published_at": now,
                 "updated_at": now,
-            },
-            merge=True,
-        )
+            }
+            txn.set(assignment_ref, proof, merge=True)
+            txn.set(publication_ref, proof, merge=True)
+            txn.set(
+                topic_ref,
+                {
+                    "youtube_video_id": youtube_video_id,
+                    "last_published_at": now,
+                    "updated_at": now,
+                },
+                merge=True,
+            )
+        if slot >= int(state.get("last_published_slot", -1)):
+            txn.set(
+                state_ref,
+                {
+                    "last_published_slot": slot,
+                    "last_published_assignment_id": assignment_id,
+                    "updated_at": now,
+                },
+                merge=True,
+            )
 
     confirm(transaction)

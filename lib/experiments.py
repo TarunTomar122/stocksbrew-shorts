@@ -63,6 +63,13 @@ def assignment_id(experiment_id: str, slot: int, topic_key: str) -> str:
     return hashlib.sha256(raw).hexdigest()[:24]
 
 
+def previous_publication_verified(state: dict[str, Any], slot: int) -> bool:
+    try:
+        return slot <= 0 or int(state.get("last_published_slot", -1)) >= slot - 1
+    except (TypeError, ValueError):
+        return False
+
+
 def format_prompt(variant: str) -> str:
     return _FORMAT_PROMPTS[variant]
 

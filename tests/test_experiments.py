@@ -7,6 +7,7 @@ from lib.experiments import (
     assignment_id,
     build_components,
     format_settings,
+    previous_publication_verified,
     rank_story_picks,
     summarize_metrics,
     validate_buffer_results,
@@ -24,6 +25,12 @@ class ExperimentPlanTest(unittest.TestCase):
             assignment_id("shorts-discovery-v1", 2, "topic-123"),
             assignment_id("shorts-discovery-v1", 2, "topic-123"),
         )
+
+    def test_next_slot_waits_for_previous_publication(self) -> None:
+        self.assertTrue(previous_publication_verified({}, 0))
+        self.assertFalse(previous_publication_verified({}, 1))
+        self.assertFalse(previous_publication_verified({"last_published_slot": None}, 1))
+        self.assertTrue(previous_publication_verified({"last_published_slot": 0}, 1))
 
     def test_new_formats_put_proof_in_frame_one(self) -> None:
         pick = {

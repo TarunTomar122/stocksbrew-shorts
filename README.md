@@ -183,7 +183,8 @@ scheduling states, and Buffer results stay attached to the assignment. A
 `scheduled` state means Buffer accepted both channel posts; it is not proof that
 YouTube or Instagram made the video public. An ambiguous or partial Buffer
 submission stops at `needs_reconciliation` and fails the workflow instead of
-retrying.
+retrying. The next experiment slot stays blocked until the prior assignment is
+independently confirmed `published` on YouTube.
 
 After checking Buffer and both channel surfaces, resolve that assignment with
 operator evidence:

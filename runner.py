@@ -563,6 +563,13 @@ def main() -> None:
             if outcome == "waiting":
                 _event("experiment_wait", next_at=reservation["next_at"])
                 return
+            if outcome == "awaiting_publication":
+                _event(
+                    "experiment_awaiting_publication",
+                    previous_slot=reservation["previous_slot"],
+                    assignment_id=reservation.get("assignment_id"),
+                )
+                return
             if outcome == "complete":
                 _event("experiment_complete", experiment_id=EXPERIMENT_ID)
                 return
