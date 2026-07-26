@@ -92,6 +92,8 @@ _BANNED_OUTPUT = (
     "what's next",
     "just hype",
 )
+_INVESTMENT_ADVICE = re.compile(r"\b(?:buy(?:ing)?|sell(?:ing)?|hold)\b", re.I)
+_LEGAL_NAME_WORDS = {"the", "inc", "corp", "corporation", "company", "class"}
 
 
 def dialogue_issues(dialogue: list[dict]) -> list[str]:
@@ -116,13 +118,31 @@ def dialogue_issues(dialogue: list[dict]) -> list[str]:
 
 def experiment_issues(candidate: dict, pick: dict) -> list[str]:
     variant = pick.get("format_variant")
-    if not variant or variant == "baseline_dialogue":
-        return []
-
     issues = []
+    full_output = json.dumps(candidate).lower()
+    title = str(candidate.get("title") or "")
+    description = str(candidate.get("description") or "")
+    name = str(pick.get("name") or pick.get("ticker") or "").strip()
+    name_words = [
+        word.lower()
+        for word in re.findall(r"[A-Za-z0-9]+", name)
+        if word.lower() not in _LEGAL_NAME_WORDS
+    ]
+    if not title or len(title) > 60:
+        issues.append("use a non-empty title no longer than 60 characters")
+    if not description or len(description) > 200:
+        issues.append("use a non-empty description no longer than 200 characters")
+    if name_words and not any(word in title.lower() for word in name_words):
+        issues.append("name the company in the title")
+    if _INVESTMENT_ADVICE.search(full_output):
+        issues.append("remove investment recommendations")
+    if any(phrase in full_output for phrase in _BANNED_OUTPUT):
+        issues.append("remove repetitive stock-video wording")
+    if not variant or variant == "baseline_dialogue":
+        return issues
+
     dialogue = candidate.get("dialogue") or []
     first = str(dialogue[0].get("text", "")) if dialogue else ""
-    name = str(pick.get("name") or pick.get("ticker") or "").strip()
     pct = pick.get("change_pct")
     if name and name.lower() not in first.lower():
         issues.append("put the exact company name in the first spoken line")
@@ -136,9 +156,6 @@ def experiment_issues(candidate: dict, pick: dict) -> list[str]:
     ):
         issues.append("use one sentence and one claim per dialogue cut")
 
-    full_output = json.dumps(candidate).lower()
-    if re.search(r"\b(buy|sell|hold)\b", full_output):
-        issues.append("remove investment recommendations")
     return issues
 
 
@@ -224,7 +241,11 @@ def generate_script(pick: dict, *, model: str = "gpt-4.1-mini") -> dict:
     key = _cache_key(pick, model)
     cached = _read_cache(key)
     if cached:
-        return json.loads(cached)
+        candidate = json.loads(cached)
+        issues = dialogue_issues(candidate.get("dialogue") or [])
+        issues.extend(experiment_issues(candidate, pick))
+        if not issues:
+            return candidate
 
     client = _client()
     user_msg = _format_pick(pick)

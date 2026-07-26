@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import unittest
+from unittest.mock import patch
 
-from lib.storygen import dialogue_issues, experiment_issues
+from lib.storygen import dialogue_issues, experiment_issues, generate_script
 
 
 class DialogueQualityTest(unittest.TestCase):
@@ -24,10 +26,44 @@ class DialogueQualityTest(unittest.TestCase):
                 }
             ],
             "title": "Tesla's 14.5% Capex Contradiction",
+            "description": "Tesla fell while capex accelerated. #stocks #shorts",
         }
 
         self.assertTrue(experiment_issues(rejected, pick))
         self.assertEqual(experiment_issues(accepted, pick), [])
+
+    def test_baseline_metadata_rejects_investment_advice(self) -> None:
+        pick = {"name": "Sandisk", "format_variant": "baseline_dialogue"}
+        candidate = {
+            "dialogue": [{"character": "rae", "text": "This is a buying opportunity."}],
+            "title": "Sandisk Is a Buy",
+            "description": "Buy the dip. #stocks #shorts",
+        }
+
+        self.assertIn("remove investment recommendations", experiment_issues(candidate, pick))
+
+    def test_invalid_cached_script_is_not_reused(self) -> None:
+        cached = json.dumps(
+            {
+                "dialogue": [
+                    {"character": "rae2", "text": "Sandisk is a buying opportunity."},
+                    {
+                        "character": "rae",
+                        "text": "The memory market is improving, so investors should buy the dip before revenue accelerates again.",
+                    },
+                ],
+                "title": "Sandisk Is a Buy",
+                "description": "Buy the dip. #stocks #shorts",
+            }
+        )
+        with (
+            patch("lib.storygen._read_cache", return_value=cached),
+            patch("lib.storygen._client", side_effect=RuntimeError("regenerate")) as client,
+            self.assertRaisesRegex(RuntimeError, "regenerate"),
+        ):
+            generate_script({"name": "Sandisk", "format_variant": "baseline_dialogue"})
+
+        client.assert_called_once()
 
     def test_rejects_formulaic_dialogue(self) -> None:
         dialogue = [

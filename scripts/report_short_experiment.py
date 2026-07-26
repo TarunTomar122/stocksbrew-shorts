@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from lib.experiments import EXPERIMENT_PLAN, summarize_metrics
+from lib.experiments import EXPERIMENT_PLAN, EXPERIMENT_TOPIC_CLASS, summarize_metrics
 
 
 DEFAULT_INPUT = ROOT / "analytics" / "shorts_experiment_metrics.csv"
@@ -41,6 +41,7 @@ REQUIRED_FIELDS = {
     "assignment_id",
     "slot",
     "variant",
+    "topic_class",
     "video_id",
     "published_at",
     "measured_at",
@@ -60,9 +61,19 @@ def load_metrics(path: Path) -> list[dict]:
         for line, row in enumerate(reader, 2):
             if not any(row.values()):
                 continue
-            for field in ("experiment_id", "assignment_id", "variant", "video_id"):
+            for field in (
+                "experiment_id",
+                "assignment_id",
+                "variant",
+                "topic_class",
+                "video_id",
+            ):
                 if not row.get(field):
                     raise ValueError(f"Line {line}: {field} is required")
+            if row["topic_class"] != EXPERIMENT_TOPIC_CLASS:
+                raise ValueError(
+                    f"Line {line}: topic_class must be {EXPERIMENT_TOPIC_CLASS}"
+                )
             if row["video_id"] in seen_videos:
                 raise ValueError(f"Line {line}: duplicate video_id {row['video_id']}")
             if row["assignment_id"] in seen_assignments:

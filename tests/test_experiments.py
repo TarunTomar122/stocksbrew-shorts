@@ -68,12 +68,21 @@ class StorySelectionTest(unittest.TestCase):
                 "catalyst": "Management guidance",
                 "thesis": "Margins fell while spending jumped.",
             },
+            {
+                "ticker": "SNDK",
+                "name": "Sandisk",
+                "change_pct": -18,
+                "headline": "The pullback is a buying opportunity",
+                "catalyst": None,
+                "thesis": "Buy the dip",
+            },
         ]
 
         ranked = rank_story_picks(picks, min_move_pct=5)
 
         self.assertEqual(ranked[0]["ticker"], "TSLA")
-        self.assertGreater(ranked[0]["selection_score"], ranked[1]["selection_score"])
+        self.assertEqual([item["ticker"] for item in ranked], ["TSLA"])
+        self.assertEqual(ranked[0]["topic_class"], "explainable_hard_move")
 
 
 class PublicationTest(unittest.TestCase):
@@ -163,6 +172,7 @@ class AnalyticsReportTest(unittest.TestCase):
         ]
         for row in rows:
             row["duration_seconds"] = 23
+            row["topic_class"] = "explainable_hard_move"
 
         summary = summarize_metrics(rows)
 
@@ -173,6 +183,9 @@ class AnalyticsReportTest(unittest.TestCase):
             if row["variant"] != "baseline_dialogue":
                 row["duration_seconds"] = 12
         self.assertEqual(summarize_metrics(rows)["gate"], "incomparable_duration")
+
+        rows[0]["topic_class"] = "earnings"
+        self.assertEqual(summarize_metrics(rows)["gate"], "incomparable_topic_class")
 
     def test_gate_waits_for_all_six_videos(self) -> None:
         summary = summarize_metrics(

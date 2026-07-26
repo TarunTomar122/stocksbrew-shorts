@@ -459,6 +459,7 @@ def reserve_experiment_assignment(
                 "experiment_id": experiment_id,
                 "slot": slot,
                 "variant": plan[slot],
+                "topic_class": pick.get("topic_class"),
                 "topic_key": topic_key,
                 "pick": pick,
                 "status": "assigned",

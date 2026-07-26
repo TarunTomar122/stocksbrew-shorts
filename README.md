@@ -180,6 +180,8 @@ The scheduled workflow runs `shorts-discovery-v1`, a fixed six-video sequence:
 Firestore keeps one active assignment and a 48-hour Buffer scheduling gate, so the
 four daily cron checks cannot create a burst. Generated scripts, variants,
 scheduling states, and Buffer results stay attached to the assignment. A
+candidate must be a 5%+ explainable hard move and contain no raw investment
+recommendation language before it can be assigned.
 `scheduled` state means Buffer accepted both channel posts; it is not proof that
 YouTube or Instagram made the video public. An ambiguous or partial Buffer
 submission stops at `needs_reconciliation` and fails the workflow instead of
@@ -224,6 +226,8 @@ leave it blank instead of deriving it. See YouTube's
 Record the exact video duration too. The report refuses a retention conclusion
 when any new-format duration differs from the control mean by more than 20%
 or five seconds, whichever is larger.
+Every slot also records `topic_class=explainable_hard_move`; the report rejects
+mixed topic classes rather than pretending unlike stories are comparable.
 
 Judge the new formats first on stayed-to-watch and average percentage viewed.
 The gate is at least +5 percentage points stayed-to-watch versus the three

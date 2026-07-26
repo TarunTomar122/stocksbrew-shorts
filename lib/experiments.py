@@ -5,6 +5,7 @@ from typing import Any
 
 
 EXPERIMENT_ID = "shorts-discovery-v1"
+EXPERIMENT_TOPIC_CLASS = "explainable_hard_move"
 EXPERIMENT_PLAN = (
     "baseline_dialogue",
     "move_mechanism",
@@ -56,6 +57,7 @@ _SPECIFIC_TERMS = re.compile(
     re.IGNORECASE,
 )
 _NUMBER = re.compile(r"(?:[$€£]\s*)?\d+(?:\.\d+)?\s*(?:%|billion|million|bn|m)?", re.I)
+_INVESTMENT_ADVICE = re.compile(r"\b(?:buy(?:ing)?|sell(?:ing)?|hold)\b", re.I)
 
 
 def assignment_id(experiment_id: str, slot: int, topic_key: str) -> str:
@@ -210,6 +212,19 @@ def story_score(pick: dict[str, Any]) -> float:
     return score
 
 
+def _is_explainable(pick: dict[str, Any]) -> bool:
+    text = " ".join(
+        str(pick.get(key) or "")
+        for key in ("headline", "catalyst", "thesis", "context", "reason")
+    )
+    catalyst = str(pick.get("catalyst") or "").strip().lower()
+    vague_catalyst = any(phrase in catalyst for phrase in _VAGUE_PHRASES)
+    return (
+        not _INVESTMENT_ADVICE.search(text)
+        and ((catalyst and not vague_catalyst) or bool(_SPECIFIC_TERMS.search(text)))
+    )
+
+
 def rank_story_picks(
     picks: list[dict[str, Any]], min_move_pct: float = 5
 ) -> list[dict[str, Any]]:
@@ -223,8 +238,14 @@ def rank_story_picks(
                 or 0
             )
         )
-        if move >= min_move_pct:
-            ranked.append({**pick, "selection_score": story_score(pick)})
+        if move >= min_move_pct and _is_explainable(pick):
+            ranked.append(
+                {
+                    **pick,
+                    "selection_score": story_score(pick),
+                    "topic_class": EXPERIMENT_TOPIC_CLASS,
+                }
+            )
     return sorted(ranked, key=lambda item: item["selection_score"], reverse=True)
 
 
@@ -290,6 +311,12 @@ def summarize_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
         or not plan_matches
     ):
         return {"gate": "incomplete_experiment"}
+    topic_classes = {row.get("topic_class") for row in rows}
+    if topic_classes != {EXPERIMENT_TOPIC_CLASS}:
+        return {
+            "gate": "incomparable_topic_class",
+            "topic_classes": sorted(map(str, topic_classes)),
+        }
 
     groups: dict[str, list[dict[str, Any]]] = {}
     for row in rows:

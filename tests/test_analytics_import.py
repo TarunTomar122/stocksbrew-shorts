@@ -10,14 +10,14 @@ from scripts.report_short_experiment import load_metrics
 class AnalyticsImportTest(unittest.TestCase):
     def test_rejects_invalid_manual_metrics(self) -> None:
         header = (
-            "experiment_id,assignment_id,slot,variant,video_id,published_at,"
+            "experiment_id,assignment_id,slot,variant,topic_class,video_id,published_at,"
             "duration_seconds,shown_in_feed,engaged_views,"
             "stayed_to_watch_pct,swiped_away_pct,"
             "avg_view_duration_seconds,avg_percentage_viewed,"
             "shorts_feed_share_pct,views,subscriber_change,measured_at\n"
         )
         valid = (
-            "shorts-discovery-v1,a0,0,baseline_dialogue,v0,"
+            "shorts-discovery-v1,a0,0,baseline_dialogue,explainable_hard_move,v0,"
             "2026-07-26T03:00:00+00:00,23,,30,30,70,12,80,90,50,1,"
             "2026-07-28T03:00:00+00:00\n"
         )
