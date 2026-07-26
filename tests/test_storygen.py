@@ -4,10 +4,29 @@ import json
 import unittest
 from unittest.mock import patch
 
-from lib.storygen import dialogue_issues, experiment_issues, generate_script
+from lib.storygen import (
+    _format_pick,
+    _system_prompt,
+    dialogue_issues,
+    experiment_issues,
+    generate_script,
+)
 
 
 class DialogueQualityTest(unittest.TestCase):
+    def test_experiment_prompt_has_one_duration_contract(self) -> None:
+        prompt = _system_prompt({"format_variant": "move_mechanism"})
+
+        self.assertIn("56-70 word", prompt)
+        self.assertNotIn("35-60 word", prompt)
+        self.assertNotIn("2-3 sentence explanation", prompt)
+        self.assertNotIn("Screaming Buy", prompt)
+        self.assertIn("one 8-12 word reaction", prompt)
+        self.assertIn(
+            "exactly four turns",
+            _format_pick({"format_variant": "move_mechanism"}),
+        )
+
     def test_experiment_requires_exact_first_line_and_no_advice(self) -> None:
         pick = {
             "name": "Tesla",
@@ -23,7 +42,19 @@ class DialogueQualityTest(unittest.TestCase):
                 {
                     "character": "rae2",
                     "text": "Tesla fell 14.5%, yet capex is still accelerating.",
-                }
+                },
+                {
+                    "character": "rae",
+                    "text": "Management cut near-term delivery targets while keeping the new factory budget unchanged through the next production cycle.",
+                },
+                {
+                    "character": "rae2",
+                    "text": "That tells investors the market is punishing execution risk before added capacity has any chance to improve automotive revenue.",
+                },
+                {
+                    "character": "rae",
+                    "text": "The next report must show margins stabilizing as spending converts into delivered vehicles, cash flow, and measurable factory output.",
+                },
             ],
             "title": "Tesla's 14.5% Capex Contradiction",
             "description": "Tesla fell while capex accelerated. #stocks #shorts",
@@ -31,6 +62,26 @@ class DialogueQualityTest(unittest.TestCase):
 
         self.assertTrue(experiment_issues(rejected, pick))
         self.assertEqual(experiment_issues(accepted, pick), [])
+        too_short = {**accepted, "dialogue": accepted["dialogue"][:1]}
+        self.assertIn(
+            "use 56-70 words to keep experiment durations comparable",
+            " ".join(experiment_issues(too_short, pick)),
+        )
+        invented_number = {
+            **accepted,
+            "dialogue": [
+                accepted["dialogue"][0],
+                {
+                    **accepted["dialogue"][1],
+                    "text": accepted["dialogue"][1]["text"] + " Revenue is 30% recurring.",
+                },
+                *accepted["dialogue"][2:],
+            ],
+        }
+        self.assertIn(
+            "use the verified move percentage as the only number",
+            experiment_issues(invented_number, pick),
+        )
 
     def test_baseline_metadata_rejects_investment_advice(self) -> None:
         pick = {"name": "Sandisk", "format_variant": "baseline_dialogue"}
@@ -64,6 +115,31 @@ class DialogueQualityTest(unittest.TestCase):
             generate_script({"name": "Sandisk", "format_variant": "baseline_dialogue"})
 
         client.assert_called_once()
+
+    def test_cached_result_does_not_validate_its_input_fields(self) -> None:
+        pick = {"name": "Tesla", "change_pct": -14.5, "format_variant": "move_mechanism"}
+        cached = json.dumps(
+            {
+                **pick,
+                "format_instructions": "Never say buy, sell, or hold.",
+                "dialogue": [
+                    {"character": "rae2", "text": "Tesla fell 14.5%, yet capex is still accelerating."},
+                    {"character": "rae", "text": "Management cut near-term delivery targets while keeping the new factory budget unchanged through the next production cycle."},
+                    {"character": "rae2", "text": "That tells investors the market is punishing execution risk before added capacity has any chance to improve automotive revenue."},
+                    {"character": "rae", "text": "The next report must show margins stabilizing as spending converts into delivered vehicles, cash flow, and measurable factory output."},
+                ],
+                "title": "Tesla's 14.5% Capex Contradiction",
+                "description": "Tesla fell while capex accelerated. #stocks #shorts",
+            }
+        )
+        with (
+            patch("lib.storygen._read_cache", return_value=cached),
+            patch("lib.storygen._client") as client,
+        ):
+            result = generate_script(pick)
+
+        self.assertEqual(result["title"], "Tesla's 14.5% Capex Contradiction")
+        client.assert_not_called()
 
     def test_rejects_formulaic_dialogue(self) -> None:
         dialogue = [

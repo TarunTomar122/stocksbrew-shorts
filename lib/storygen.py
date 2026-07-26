@@ -94,6 +94,12 @@ _BANNED_OUTPUT = (
 )
 _INVESTMENT_ADVICE = re.compile(r"\b(?:buy(?:ing)?|sell(?:ing)?|hold)\b", re.I)
 _LEGAL_NAME_WORDS = {"the", "inc", "corp", "corporation", "company", "class"}
+_NUMBER_MENTION = re.compile(r"\b\d+(?:\.\d+)?%?")
+_CONTRADICTION = re.compile(
+    r"\b(?:despite|but|yet|although|while|even\s+(?:after|though|with)|"
+    r"can't|cannot|couldn't|fails?\s+to)\b",
+    re.I,
+)
 
 
 def dialogue_issues(dialogue: list[dict]) -> list[str]:
@@ -138,6 +144,21 @@ def experiment_issues(candidate: dict, pick: dict) -> list[str]:
         issues.append("remove investment recommendations")
     if any(phrase in full_output for phrase in _BANNED_OUTPUT):
         issues.append("remove repetitive stock-video wording")
+    if variant:
+        dialogue_text = " ".join(
+            str(line.get("text") or "") for line in candidate.get("dialogue") or []
+        )
+        word_count = sum(
+            len(str(line.get("text") or "").split())
+            for line in candidate.get("dialogue") or []
+        )
+        if not 56 <= word_count <= 70:
+            issues.append(
+                f"use 56-70 words to keep experiment durations comparable "
+                f"(got {word_count})"
+            )
+        if len(_NUMBER_MENTION.findall(dialogue_text)) > 1:
+            issues.append("use the verified move percentage as the only number")
     if not variant or variant == "baseline_dialogue":
         return issues
 
@@ -148,7 +169,7 @@ def experiment_issues(candidate: dict, pick: dict) -> list[str]:
         issues.append("put the exact company name in the first spoken line")
     if pct is not None and f"{abs(float(pct)):.1f}%" not in first:
         issues.append("put the exact percentage move in the first spoken line")
-    if not re.search(r"\b(despite|but|yet|although|while)\b", first, re.I):
+    if not _CONTRADICTION.search(first):
         issues.append("put the contradiction in the first spoken line")
     if any(
         len(re.findall(r"[.!?](?:\s|$)", str(line.get("text", "")))) > 1
@@ -168,12 +189,35 @@ def _client():
 
 
 def _system_prompt(pick: dict) -> str:
-    if pick.get("format_variant") in (None, "baseline_dialogue"):
+    variant = pick.get("format_variant")
+    if not variant:
         return SYSTEM_PROMPT
-    return SYSTEM_PROMPT + (
+    prompt = SYSTEM_PROMPT.replace("35-60 word", "56-70 word", 1).replace(
+        "Falling Knife or Screaming Buy?",
+        "Temporary Shock or Deeper Problem?",
+        1,
+    )
+    duration_rule = (
+        "\nCONTROLLED EXPERIMENT: Use 56-70 words total so every format has a "
+        "comparable duration. Use only facts supplied in the user message; never "
+        "invent a metric, estimate, date, event, or claim."
+    )
+    if variant == "baseline_dialogue":
+        return prompt + duration_rule
+    prompt = prompt.replace(
+        "Write 2-5 alternating turns with UNEVEN lengths. At least one turn must "
+        "be a substantial 2-3 sentence explanation and at least one must be a "
+        "short reaction.",
+        "Write 3-5 alternating one-sentence turns with UNEVEN lengths, including "
+        "one substantial explanation and one short reaction.",
+        1,
+    )
+    return prompt + duration_rule + (
         "\nEXPERIMENT OVERRIDE: Every turn must be exactly one sentence carrying "
-        "one causal claim. The first sentence must contain the exact company, "
-        "percentage move, and a despite/but/yet contradiction."
+        "one causal claim. Include one 8-12 word reaction and one 18-24 word "
+        "explanation. The first sentence must contain the exact company, "
+        "percentage move, and a clear contradiction such as despite, yet, even "
+        "after, or can't."
     )
 
 
@@ -229,6 +273,12 @@ def _format_pick(pick: dict) -> str:
 
     if pick.get("format_instructions"):
         lines.append(f"Required format: {pick['format_instructions']}")
+    if pick.get("format_variant"):
+        lines.append(
+            "Required turn plan: exactly four turns with 12-14, 18-22, 8-12, "
+            "and 18-22 words respectively; use no numeric value except the supplied "
+            "move percentage."
+        )
 
     return "\n".join(lines)
 
@@ -241,23 +291,29 @@ def generate_script(pick: dict, *, model: str = "gpt-4.1-mini") -> dict:
     key = _cache_key(pick, model)
     cached = _read_cache(key)
     if cached:
-        candidate = json.loads(cached)
+        cached_result = json.loads(cached)
+        candidate = {
+            field: cached_result.get(field)
+            for field in ("dialogue", "title", "description")
+        }
         issues = dialogue_issues(candidate.get("dialogue") or [])
         issues.extend(experiment_issues(candidate, pick))
         if not issues:
-            return candidate
+            return cached_result
 
     client = _client()
     user_msg = _format_pick(pick)
 
     messages = [{"role": "system", "content": _system_prompt(pick)}]
-    for shot in FEW_SHOT:
-        messages.append({"role": "user", "content": shot["user"]})
-        messages.append({"role": "assistant", "content": shot["assistant"]})
+    if not pick.get("format_variant"):
+        for shot in FEW_SHOT:
+            messages.append({"role": "user", "content": shot["user"]})
+            messages.append({"role": "assistant", "content": shot["assistant"]})
     messages.append({"role": "user", "content": user_msg})
 
     parsed = None
-    for attempt in range(2):
+    last_issues: list[str] = []
+    for attempt in range(3):
         resp = client.chat.completions.create(
             model=model,
             messages=messages,
@@ -276,13 +332,16 @@ def generate_script(pick: dict, *, model: str = "gpt-4.1-mini") -> dict:
         if not issues:
             parsed = candidate
             break
+        last_issues = issues
         messages.extend([
             {"role": "assistant", "content": raw},
             {"role": "user", "content": "Rejected: " + "; ".join(issues) + ". Rewrite the complete JSON."},
         ])
 
     if parsed is None:
-        raise ValueError("generated dialogue failed quality checks")
+        raise ValueError(
+            "generated dialogue failed quality checks: " + "; ".join(last_issues)
+        )
 
     dialogue = parsed.get("dialogue", [])
     title = parsed.get("title", "")

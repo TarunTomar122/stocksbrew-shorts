@@ -20,23 +20,24 @@ _FORMAT_PROMPTS = {
     "baseline_dialogue": "",
     "move_mechanism": (
         "Open with the exact company and percentage move, then the contradiction. "
-        "Explain one mechanism behind the move and one concrete number proving it. "
+        "Explain one mechanism behind the move. Use the move percentage as the only "
+        "number and one provided fact as proof. "
         "Use one sentence and one causal claim per turn. End with one checkpoint. "
         "Title the exact move or mechanism. "
         "Never say buy, sell, or hold."
     ),
     "catalyst_checkpoint": (
         "Open with the exact company and percentage move, then the catalyst. "
-        "Use one concrete number as proof. Use one sentence and one causal claim per "
-        "turn, then end "
+        "Use the move percentage as the only number and one provided fact as proof. "
+        "Use one sentence and one causal claim per turn, then end "
         "with the next dated or measurable checkpoint. Title the catalyst, not a "
         "generic question. Never say buy, sell, or hold."
     ),
     "radar_invalidation": (
         "Open with the exact company and percentage move, then the market's apparent "
-        "belief. Use one concrete number as proof and identify the single fact that "
-        "would invalidate that belief. Use one sentence and one causal claim per "
-        "turn. Title the contradiction or invalidation. "
+        "belief. Use the move percentage as the only number, then identify the single "
+        "provided fact that would invalidate that belief. Use one sentence and one "
+        "causal claim per turn. Title the contradiction or invalidation. "
         "Never say buy, sell, or hold."
     ),
 }
@@ -58,6 +59,11 @@ _SPECIFIC_TERMS = re.compile(
 )
 _NUMBER = re.compile(r"(?:[$€£]\s*)?\d+(?:\.\d+)?\s*(?:%|billion|million|bn|m)?", re.I)
 _INVESTMENT_ADVICE = re.compile(r"\b(?:buy(?:ing)?|sell(?:ing)?|hold)\b", re.I)
+_CONTRADICTION = re.compile(
+    r"\b(?:despite|but|yet|although|while|even\s+(?:after|though|with)|"
+    r"can't|cannot|couldn't|fails?\s+to)\b",
+    re.I,
+)
 
 
 def assignment_id(experiment_id: str, slot: int, topic_key: str) -> str:
@@ -129,8 +135,8 @@ def build_components(pick: dict[str, Any], variant: str) -> list[dict[str, Any]]
         or "Watch whether the move holds"
     )
     first_line = str(((pick.get("dialogue") or [{}])[0]).get("text") or "")
-    match = re.search(r"\b(despite|but|yet|although|while)\b.+", first_line, re.I)
-    contradiction = match.group(0) if match else pick.get("headline") or thesis
+    match = _CONTRADICTION.search(first_line)
+    contradiction = first_line[match.start():] if match else pick.get("headline") or thesis
     first = {
         "type": "big_move",
         "show_at": 0,

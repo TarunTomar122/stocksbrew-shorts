@@ -179,7 +179,9 @@ The scheduled workflow runs `shorts-discovery-v1`, a fixed six-video sequence:
 
 The three new formats share the exact move in frame one, then use distinct
 mechanism, checkpoint, or invalidation proof cards instead of repeating one
-generic quote-card treatment.
+generic quote-card treatment. Every experiment script must contain 56-70 words,
+which maps to roughly 19-26 seconds at the observed avatar speech rate and keeps
+it near the 23.5-second first control.
 
 Firestore keeps one active assignment and a 48-hour Buffer scheduling gate, so the
 four daily cron checks cannot create a burst. Generated scripts, variants,
