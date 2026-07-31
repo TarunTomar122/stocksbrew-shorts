@@ -487,9 +487,17 @@ def main() -> None:
             picks = firebase.best_story_picks(
                 args.auto_market, n=max(args.auto_count * 4, 10)
             )
-            picks = rank_story_picks(picks)
+            if args.experiment:
+                picks = rank_story_picks(picks)
             if not picks:
-                _event("no_fresh_topic", reason="no_explainable_hard_moves")
+                _event(
+                    "no_fresh_topic",
+                    reason=(
+                        "no_explainable_hard_moves"
+                        if args.experiment
+                        else "no_story_picks"
+                    ),
+                )
                 return
 
             # Local files prevent same-run duplication; Firestore is the durable source.
