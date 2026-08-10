@@ -15,6 +15,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+if __name__ == "__main__":
+    raise SystemExit("Video generation disabled")
+
 from lib import avatar, brainrot, clipper, transcribe
 
 

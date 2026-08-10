@@ -366,6 +366,8 @@ def run_queue(
 
 
 def main() -> None:
+    raise SystemExit("Shorts pipeline disabled")
+
     p = argparse.ArgumentParser(description="Process queued scripts into brainrot shorts.")
     p.add_argument("--max", type=int, default=1, help="Max scripts to process this run")
     p.add_argument("--loop", action="store_true", help="Keep polling queue (for long-running cron)")
